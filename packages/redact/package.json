@@ -1,0 +1,33 @@
+{
+  "name": "@contextio/redact",
+  "version": "0.0.1",
+  "description": "Privacy and redaction layer for LLM API calls",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:test": "tsc -p tsconfig.test.json",
+    "test": "pnpm run build:test && node --test 'dist-test/test/**/*.test.js'",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist dist-test",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@contextio/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7"
+  }
+}

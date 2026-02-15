@@ -1,0 +1,27 @@
+{
+  "name": "context",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo build",
+    "build:test": "turbo build && tsc -p tsconfig.test.json",
+    "test": "pnpm run build:test && node --test 'dist-test/**/*.test.js'",
+    "test:unit": "turbo test",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "clean": "turbo clean"
+  },
+  "dependencies": {
+    "@contextio/core": "workspace:*",
+    "@contextio/proxy": "workspace:*",
+    "@contextio/redact": "workspace:*",
+    "@contextio/logger": "workspace:*",
+    "@contextio/cli": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "turbo": "^2",
+    "typescript": "^5.7"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

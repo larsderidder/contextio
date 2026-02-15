@@ -1,0 +1,44 @@
+{
+  // Start from PII preset (secrets + structured PII)
+  "extends": "pii",
+
+  // Add rules specific to your organization
+  "rules": [
+    {
+      "id": "employee-id",
+      "pattern": "EMP-\\d{5,}",
+      "replacement": "[EMPLOYEE_ID]"
+    },
+    {
+      // Only fires when context words appear nearby
+      "id": "internal-project",
+      "pattern": "(?i)project[- ](?:atlas|phoenix|hydra)",
+      "replacement": "[PROJECT_NAME]",
+      "context": ["project", "internal", "codename", "classified"],
+      "contextWindow": 150
+    },
+    {
+      "id": "dutch-bsn",
+      "pattern": "\\b\\d{9}\\b",
+      "replacement": "[BSN_REDACTED]",
+      "context": ["bsn", "burgerservicenummer", "sofinummer"]
+    }
+  ],
+
+  // Never redact these, even if they match a rule
+  "allowlist": {
+    "strings": [
+      "support@mycompany.com",
+      "noreply@mycompany.com"
+    ],
+    "patterns": [
+      "test-\\d+@example\\.com"
+    ]
+  },
+
+  // Only redact inside message content, not model names or roles
+  "paths": {
+    "skip": ["model", "max_tokens", "temperature"],
+    "only": ["messages[*].content", "system"]
+  }
+}

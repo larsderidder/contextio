@@ -1,0 +1,6 @@
+{
+  "extends": "strict",
+  "paths": {
+    "skip": ["model", "max_tokens", "temperature", "top_p", "stream"]
+  }
+}

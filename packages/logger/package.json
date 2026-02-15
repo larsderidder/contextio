@@ -1,0 +1,32 @@
+{
+  "name": "@contextio/logger",
+  "version": "0.0.1",
+  "description": "Capture-to-disk plugin for @contextio/core proxy",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "node --test test/*.test.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@contextio/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7"
+  }
+}
