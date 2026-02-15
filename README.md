@@ -1,38 +1,12 @@
-# @contextio
+# contextio
 
-Transparent proxy between AI tools and LLM APIs. Logs and redacts traffic without touching the tools themselves.
+Sits between your AI coding tools and the LLM APIs they call. Logs everything, optionally redacts PII and secrets before they leave your machine.
 
-```
-AI Tool  -->  contextio proxy  -->  LLM API
-                    |
-              +-----------+
-              |  plugins   |
-              +-----------+
-              redact  logger
-```
+You route your API keys through this thing, so there are zero external dependencies. Read the code.
 
-Zero external dependencies. You route API keys through it, so the code must be fully auditable.
+## What it can do
 
-## Quick start
-
-```bash
-# Wrap a tool: proxy starts, runs the tool, shuts down when it exits
-ctxio proxy -- claude
-
-# With redaction
-ctxio proxy --redact -- claude
-
-# Or start the proxy separately and attach tools to it
-ctxio proxy --redact
-ctxio attach claude        # in another terminal
-ctxio attach gemini        # in another terminal
-```
-
-`contextio` works as a longer alias for `ctxio`.
-
-## Examples
-
-Log everything Claude sends and receives:
+Log everything an AI tool sends and receives:
 
 ```bash
 ctxio proxy -- claude
@@ -41,140 +15,77 @@ ls ~/.contextio/captures/
 # claude_a1b2c3d4_1771190200500-000001.json
 ```
 
-Redact PII before it reaches the API:
+Strip PII and secrets from requests before they reach the API:
 
 ```bash
 ctxio proxy --redact -- claude
 # "My SSN is 123-45-6789" -> LLM sees "My SSN is [SSN_REDACTED]"
 ```
 
-Redact and restore in responses (reversible mode):
+Redact with reversible placeholders, so responses still make sense:
 
 ```bash
 ctxio proxy --redact-reversible -- claude
-# You:    "Email john@test.com about the project"
-# LLM:    "I'll draft an email to [EMAIL_1]"
+# You:     "Email john@test.com about the project"
+# LLM:     "I'll draft an email to [EMAIL_1]"
 # You see: "I'll draft an email to john@test.com"
 ```
 
-Run the proxy in the background, attach multiple tools:
+Run a shared proxy, attach multiple tools:
+
+```bash
+ctxio proxy --redact
+ctxio attach claude       # another terminal
+ctxio attach gemini       # another terminal
+```
+
+Or run it in the background:
 
 ```bash
 ctxio background start --redact
 ctxio attach claude
-ctxio attach gemini
 ctxio background stop
 ```
 
-Use a custom redaction policy:
-
-```bash
-ctxio proxy --redact-policy ./my-rules.json -- claude
-```
-
-## Tool support
-
-| Tool | Mode | Redaction | Logging | Notes |
-|:---|:---|:---|:---|:---|
-| Claude CLI | proxy | yes | yes | |
-| Pi | proxy | yes | yes | Anthropic + OpenAI models |
-| Gemini CLI | proxy | yes | yes | |
-| Aider | proxy | yes | yes | untested |
-| OpenCode | mitmproxy | no | yes | Routes through opencode.ai gateway regardless of model |
-| Copilot CLI | mitmproxy | no | yes | |
-| Codex | none | no | no | Own sandboxed network proxy, ignores all env vars |
-
-Tools in **proxy** mode get full redaction and logging. The proxy rewrites base URLs so traffic flows through contextio.
-
-Tools in **mitmproxy** mode can't be base-URL-rewritten but do respect `HTTPS_PROXY`. contextio starts mitmproxy automatically and captures traffic. No redaction because the traffic goes directly to the API (contextio can only observe, not modify).
-
-## Logging
-
-Logging is on by default. Every request/response pair is written as a JSON file to `~/.contextio/captures/`.
-
-```bash
-ctxio proxy -- claude                              # logging on (default)
-ctxio proxy --no-log -- claude                     # disable logging
-ctxio proxy --log-dir ./my-captures -- claude      # custom directory
-ctxio proxy --log-max-sessions 10 -- claude        # keep only last 10 sessions
-```
-
-### Capture files
-
-Files are named `{tool}_{session}_{timestamp}-{sequence}.json`:
-
-```
-claude_a1b2c3d4_1771190200000-000000.json
-claude_a1b2c3d4_1771190200500-000001.json
-gemini_67bb9e8f_1771188600815-000000.json
-```
-
-Each file contains one request/response pair:
-
-```json
-{
-  "timestamp": "2026-02-15T20:50:00.815Z",
-  "sessionId": "67bb9e8f",
-  "method": "POST",
-  "path": "/v1/messages",
-  "source": "claude",
-  "provider": "anthropic",
-  "apiFormat": "anthropic-messages",
-  "targetUrl": "https://api.anthropic.com/v1/messages",
-  "requestHeaders": { "content-type": "application/json" },
-  "requestBody": { "model": "claude-sonnet-4-20250514", "messages": [...] },
-  "requestBytes": 1234,
-  "responseStatus": 200,
-  "responseHeaders": { "content-type": "text/event-stream" },
-  "responseBody": "data: {\"type\":\"content_block_delta\",...}",
-  "responseIsStreaming": true,
-  "responseBytes": 5678,
-  "timings": { "send_ms": 2, "wait_ms": 800, "receive_ms": 1200, "total_ms": 2002 }
-}
-```
-
-### Session retention
-
-Each `attach` or wrap invocation creates a session (8-char hex ID). The `--log-max-sessions` flag prunes the oldest sessions on startup, keeping only the most recent N. Files without a session ID are never pruned.
+`contextio` is a longer alias if you prefer typing.
 
 ## Redaction
 
-Strips sensitive data from requests before they reach the LLM.
+Three built-in presets, or bring your own policy file.
 
 ```bash
-ctxio proxy --redact                          # default "pii" preset
+ctxio proxy --redact                          # "pii" preset (default)
 ctxio proxy --redact-preset secrets           # API keys and tokens only
-ctxio proxy --redact-policy ./my-rules.json   # custom policy file
+ctxio proxy --redact-preset strict            # PII + IPs, dates of birth
+ctxio proxy --redact-policy ./my-rules.json   # custom rules
 ```
-
-### Presets
 
 | Preset | What it catches |
 |:---|:---|
-| `secrets` | API keys, tokens, private keys, credentials |
-| `pii` (default) | Secrets + email, SSN, credit cards, phone numbers |
-| `strict` | PII + IP addresses, dates of birth |
+| `secrets` | API keys, tokens, private keys, AWS credentials |
+| `pii` | Everything in secrets, plus email, SSN, credit cards, US phone numbers |
+| `strict` | Everything in pii, plus IPv4 addresses, dates of birth |
 
-Context-gated rules only fire when relevant words appear nearby. `123-45-6789` by itself is not redacted, but `My SSN is 123-45-6789` is.
+Rules are context-gated where it makes sense. `123-45-6789` on its own is left alone, but `My SSN is 123-45-6789` gets redacted.
 
-### Reversible mode (opt-in)
+### Reversible mode
 
 ```bash
-ctxio proxy --redact-reversible
+ctxio proxy --redact-reversible -- claude
 ```
 
-Uses numbered placeholders and restores original values in the response:
+Replaces values with numbered placeholders, then restores them in the response stream:
 
 ```
-You say:      "My email is john@test.com"
-LLM sees:     "My email is [EMAIL_1]"
-LLM replies:  "I've noted [EMAIL_1] as your contact"
-You see:       "I've noted john@test.com as your contact"
+You:       "My email is john@test.com"
+LLM sees:  "My email is [EMAIL_1]"
+LLM says:  "I've noted [EMAIL_1] as your contact"
+You see:   "I've noted john@test.com as your contact"
 ```
 
-Same value always gets the same placeholder within a session. Works with streaming responses across Anthropic, OpenAI, and Gemini formats.
+Same value always maps to the same placeholder within a session. Works across Anthropic, OpenAI, and Gemini streaming formats.
 
-Opt-in because it keeps originals in memory and reconstructs SSE events. Stable for daily use, but needs more mileage before becoming default.
+This is opt-in. It keeps originals in memory and reconstructs SSE events on the fly. Stable enough for daily use, but it hasn't had months of production mileage yet.
 
 ### Custom policies
 
@@ -195,29 +106,74 @@ Opt-in because it keeps originals in memory and reconstructs SSE events. Stable 
 }
 ```
 
-See [examples/](examples/) for sample policy files and [docs/redaction-policy.md](docs/redaction-policy.md) for the full reference.
+Full reference in [docs/redaction-policy.md](docs/redaction-policy.md). Examples in [examples/](examples/).
 
-## All commands
+## Logging
+
+On by default. Disable with `--no-log`.
+
+```bash
+ctxio proxy --log-dir ./my-captures -- claude      # custom directory
+ctxio proxy --log-max-sessions 10 -- claude        # prune old sessions on startup
+```
+
+Each capture file is a complete request/response pair:
+
+```json
+{
+  "timestamp": "2026-02-15T20:50:00.815Z",
+  "sessionId": "67bb9e8f",
+  "source": "claude",
+  "provider": "anthropic",
+  "apiFormat": "anthropic-messages",
+  "targetUrl": "https://api.anthropic.com/v1/messages",
+  "requestBody": { "model": "claude-sonnet-4-20250514", "messages": ["..."] },
+  "responseStatus": 200,
+  "responseIsStreaming": true,
+  "responseBody": "data: {\"type\":\"content_block_delta\",...}",
+  "timings": { "total_ms": 2002 }
+}
+```
+
+(Truncated for readability. Actual files include headers, byte counts, and detailed timings.)
+
+## Tool support
+
+| Tool | How | Redaction | Logging |
+|:---|:---|:---|:---|
+| Claude CLI | proxy | yes | yes |
+| Pi | proxy | yes | yes |
+| Gemini CLI | proxy | yes | yes |
+| Aider | proxy | yes | yes (untested) |
+| OpenCode | mitmproxy | no | yes |
+| Copilot CLI | mitmproxy | no | yes |
+| Codex | not supported | | |
+
+**Proxy mode** rewrites the tool's base URL so all traffic flows through contextio. Full redaction and logging.
+
+**Mitmproxy mode** is for tools that ignore base URL env vars but do respect `HTTPS_PROXY`. contextio starts mitmproxy in the background and captures traffic. You get logging but no redaction, since we can only observe the traffic, not rewrite it.
+
+**Codex** has its own sandboxed network proxy baked into a statically linked Rust binary. It ignores every env var we could set. Nothing to be done.
+
+OpenCode and Copilot require mitmproxy to be installed:
+
+```bash
+pipx install mitmproxy
+mitmdump --version         # run once to generate the CA cert
+```
+
+contextio handles starting and stopping mitmproxy automatically.
+
+## Commands
 
 ```bash
 ctxio proxy [flags]              # start proxy
 ctxio proxy [flags] -- <tool>    # wrap a tool
-ctxio attach <tool>              # attach to running proxy
+ctxio attach <tool>              # connect to running proxy
 ctxio background start|stop|status
-ctxio doctor                     # diagnostics
-ctxio --help                     # full flag reference
+ctxio doctor                     # check what's working
+ctxio --help
 ```
-
-## Prerequisites for mitmproxy tools
-
-Tools like Copilot CLI and OpenCode require mitmproxy for logging:
-
-```bash
-pipx install mitmproxy    # or: pip install mitmproxy
-mitmdump --version         # run once to generate CA cert
-```
-
-contextio starts and stops mitmproxy automatically when you attach these tools.
 
 ## Development
 
