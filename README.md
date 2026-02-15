@@ -16,10 +16,10 @@ Zero external dependencies. You route API keys through it, so the code must be f
 ## Quick start
 
 ```bash
-# Start the proxy (logging on by default to ~/.contextio/captures/)
-ctxio proxy
-
 # Wrap a tool: proxy starts, runs the tool, shuts down when it exits
+ctxio proxy -- claude
+
+# With redaction
 ctxio proxy --redact -- claude
 
 # Or start the proxy separately and attach tools to it
@@ -28,7 +28,49 @@ ctxio attach claude        # in another terminal
 ctxio attach gemini        # in another terminal
 ```
 
-`contextio` works as a longer alias.
+`contextio` works as a longer alias for `ctxio`.
+
+## Examples
+
+Log everything Claude sends and receives:
+
+```bash
+ctxio proxy -- claude
+ls ~/.contextio/captures/
+# claude_a1b2c3d4_1771190200000-000000.json
+# claude_a1b2c3d4_1771190200500-000001.json
+```
+
+Redact PII before it reaches the API:
+
+```bash
+ctxio proxy --redact -- claude
+# "My SSN is 123-45-6789" -> LLM sees "My SSN is [SSN_REDACTED]"
+```
+
+Redact and restore in responses (reversible mode):
+
+```bash
+ctxio proxy --redact-reversible -- claude
+# You:    "Email john@test.com about the project"
+# LLM:    "I'll draft an email to [EMAIL_1]"
+# You see: "I'll draft an email to john@test.com"
+```
+
+Run the proxy in the background, attach multiple tools:
+
+```bash
+ctxio background start --redact
+ctxio attach claude
+ctxio attach gemini
+ctxio background stop
+```
+
+Use a custom redaction policy:
+
+```bash
+ctxio proxy --redact-policy ./my-rules.json -- claude
+```
 
 ## Tool support
 
@@ -45,6 +87,55 @@ ctxio attach gemini        # in another terminal
 Tools in **proxy** mode get full redaction and logging. The proxy rewrites base URLs so traffic flows through contextio.
 
 Tools in **mitmproxy** mode can't be base-URL-rewritten but do respect `HTTPS_PROXY`. contextio starts mitmproxy automatically and captures traffic. No redaction because the traffic goes directly to the API (contextio can only observe, not modify).
+
+## Logging
+
+Logging is on by default. Every request/response pair is written as a JSON file to `~/.contextio/captures/`.
+
+```bash
+ctxio proxy -- claude                              # logging on (default)
+ctxio proxy --no-log -- claude                     # disable logging
+ctxio proxy --log-dir ./my-captures -- claude      # custom directory
+ctxio proxy --log-max-sessions 10 -- claude        # keep only last 10 sessions
+```
+
+### Capture files
+
+Files are named `{tool}_{session}_{timestamp}-{sequence}.json`:
+
+```
+claude_a1b2c3d4_1771190200000-000000.json
+claude_a1b2c3d4_1771190200500-000001.json
+gemini_67bb9e8f_1771188600815-000000.json
+```
+
+Each file contains one request/response pair:
+
+```json
+{
+  "timestamp": "2026-02-15T20:50:00.815Z",
+  "sessionId": "67bb9e8f",
+  "method": "POST",
+  "path": "/v1/messages",
+  "source": "claude",
+  "provider": "anthropic",
+  "apiFormat": "anthropic-messages",
+  "targetUrl": "https://api.anthropic.com/v1/messages",
+  "requestHeaders": { "content-type": "application/json" },
+  "requestBody": { "model": "claude-sonnet-4-20250514", "messages": [...] },
+  "requestBytes": 1234,
+  "responseStatus": 200,
+  "responseHeaders": { "content-type": "text/event-stream" },
+  "responseBody": "data: {\"type\":\"content_block_delta\",...}",
+  "responseIsStreaming": true,
+  "responseBytes": 5678,
+  "timings": { "send_ms": 2, "wait_ms": 800, "receive_ms": 1200, "total_ms": 2002 }
+}
+```
+
+### Session retention
+
+Each `attach` or wrap invocation creates a session (8-char hex ID). The `--log-max-sessions` flag prunes the oldest sessions on startup, keeping only the most recent N. Files without a session ID are never pruned.
 
 ## Redaction
 
@@ -104,7 +195,7 @@ Opt-in because it keeps originals in memory and reconstructs SSE events. Stable 
 }
 ```
 
-See [examples/](examples/) for sample policy files.
+See [examples/](examples/) for sample policy files and [docs/redaction-policy.md](docs/redaction-policy.md) for the full reference.
 
 ## All commands
 
