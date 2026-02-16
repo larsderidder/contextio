@@ -6,3 +6,4 @@ dist-test/
 __pycache__/
 *.pyc
 .pi/
+.idea/
