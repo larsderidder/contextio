@@ -1,12 +1,14 @@
 /**
- * @contextio/logger - Capture-to-disk plugin for @contextio/core.
+ * @contextio/logger
  *
- * Writes raw request/response captures as JSON files to a directory.
- * Uses atomic writes (write to .tmp, then rename) so readers never see
- * partial files.
+ * Capture-to-disk plugin for the contextio proxy. Writes every
+ * request/response pair as a JSON file using atomic writes (write to
+ * .tmp, then rename) so readers never see half-written files.
  *
- * Filenames include the source tool and session ID for easy identification:
- *   claude_a1b2c3d4_1739000000000-000001.json
+ * Filename format: `{source}_{sessionId}_{timestamp}-{counter}.json`
+ * Example: `claude_a1b2c3d4_1739000000000-000001.json`
+ *
+ * @packageDocumentation
  */
 
 import fs from "node:fs";
@@ -15,22 +17,28 @@ import { join } from "node:path";
 
 import type { CaptureData, ProxyPlugin } from "@contextio/core";
 
+/** Configuration for {@link createLoggerPlugin}. */
 export interface LoggerConfig {
   /**
    * Directory to write capture files to.
-   * Default: ~/.contextio/captures
+   * Default: `~/.contextio/captures`
    */
   captureDir?: string;
 
   /**
-   * Maximum number of sessions to keep. Older sessions are pruned on startup.
-   * Sessions are identified by their session ID prefix in filenames.
-   * Set to 0 to disable retention (keep everything).
-   * Default: 0 (no limit)
+   * Maximum number of sessions to retain. On startup, the plugin
+   * groups existing captures by session ID and deletes the oldest
+   * sessions beyond this limit.
+   *
+   * Set to 0 to keep everything (no pruning). Default: 0.
    */
   maxSessions?: number;
 }
 
+/**
+ * Extended plugin interface that exposes the resolved capture directory.
+ * Useful for CLI output (telling the user where captures are written).
+ */
 export interface LoggerPlugin extends ProxyPlugin {
   /** The resolved directory where captures are written. */
   captureDir: string;
@@ -54,6 +62,7 @@ export function createLoggerPlugin(config?: LoggerConfig): LoggerPlugin {
   let dirReady = false;
   let counter = 0;
 
+  /** Create the capture directory if needed, and prune old sessions on first call. */
   function ensureDir(): void {
     if (dirReady) return;
     fs.mkdirSync(captureDir, { recursive: true });
@@ -81,18 +90,15 @@ export function createLoggerPlugin(config?: LoggerConfig): LoggerPlugin {
 
   /**
    * Extract the session ID from a capture filename.
-   * Returns null if no session ID is present.
+   *
+   * Filename format: `{source}_{sessionId}_{timestamp}-{counter}.json`
+   * The session ID is the second underscore-delimited segment and is
+   * always 8 lowercase hex chars. Returns null if not present.
    */
   function extractSessionFromFilename(filename: string): string | null {
-    // Format: {source}_{sessionId}_{timestamp}-{counter}.json
-    // or:     {source}_{timestamp}-{counter}.json (no session)
     const parts = filename.replace(/\.json$/, "").split("_");
-    // If there are 4+ parts: source, sessionId, timestamp-counter parts
-    // The timestamp part contains a dash: "1739000000000-000001"
-    // Session IDs are 8 hex chars
     if (parts.length >= 3) {
       const candidate = parts[1];
-      // Session IDs are 8 hex chars
       if (/^[a-f0-9]{8}$/.test(candidate)) {
         return candidate;
       }
@@ -101,7 +107,9 @@ export function createLoggerPlugin(config?: LoggerConfig): LoggerPlugin {
   }
 
   /**
-   * Prune old sessions, keeping the most recent `maxSessions`.
+   * Delete capture files from the oldest sessions, keeping the most
+   * recent `maxSessions`. Groups files by session ID, sorts by newest
+   * timestamp, and removes everything beyond the limit.
    */
   function pruneOldSessions(): void {
     try {
@@ -167,7 +175,8 @@ export function createLoggerPlugin(config?: LoggerConfig): LoggerPlugin {
   }
 
   /**
-   * Write a capture to disk atomically.
+   * Write a capture to disk atomically (write to .tmp, then rename).
+   * Returns the filename on success, null on failure.
    */
   function write(capture: CaptureData): string | null {
     ensureDir();
