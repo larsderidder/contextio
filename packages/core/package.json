@@ -1,6 +1,6 @@
 {
   "name": "@contextio/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared types, routing, and header utilities for the @context ecosystem. Zero dependencies.",
   "license": "MIT",
   "type": "module",

@@ -29,7 +29,13 @@ jobs:
           echo "All packages built successfully"
       - name: Publish to npm
         run: |
+          # pnpm pack resolves workspace:* to real versions in the tarball
+          # npm publish handles OIDC trusted publishing (requires npm 11+/Node 24+)
           for pkg in packages/core packages/logger packages/proxy packages/redact packages/cli; do
             echo "=== Publishing $pkg ==="
-            (cd "$pkg" && npm publish --access public)
+            cd "$pkg"
+            tarball=$(pnpm pack | tail -1)
+            npm publish "$tarball" --access public
+            rm -f "$tarball"
+            cd ../..
           done

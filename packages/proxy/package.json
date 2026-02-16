@@ -1,6 +1,6 @@
 {
   "name": "@contextio/proxy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HTTP proxy with plugin system for LLM API calls. Zero npm deps beyond @contextio/core.",
   "license": "MIT",
   "type": "module",
