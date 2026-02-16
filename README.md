@@ -6,9 +6,11 @@
 
 A local proxy that sits between your AI coding tools and the LLM APIs they call. Logs every request and response, optionally strips PII and secrets before anything leaves your machine.
 
-I built this because I get nervous sending data I don't see to LLM's. Now at least I know if they are gossiping about me.
+I built this because I get nervous sending data I don't see to LLMs. Now at least I know if they are gossiping about me.
 
 All your stuff passes through this thing, so the proxy has zero external dependencies. Read the code, it's small.
+
+**Looking for full observability?** Check out [Context Lens](https://github.com/larsderidder/contextlens), a web-based tracing and analytics platform built on top of contextio. It adds session replay, cost tracking, and prompt engineering tools.
 
 ## Install
 
