@@ -1,6 +1,6 @@
 {
   "name": "@contextio/cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "CLI for contextio: LLM API proxy with redaction and logging",
   "license": "MIT",
   "type": "module",

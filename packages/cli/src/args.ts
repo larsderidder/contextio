@@ -114,7 +114,7 @@ export function buildProgram(
   const program = new Command()
     .name("ctxio")
     .description("LLM API proxy toolkit")
-    .version("0.0.1", "-v, --version")
+    .version("0.1.0", "-v, --version")
     .enablePositionalOptions()
     .exitOverride()
     .configureOutput({ writeErr: () => {}, writeOut: () => {} });

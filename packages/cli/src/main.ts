@@ -37,7 +37,7 @@ import { runInspect } from "./inspect.js";
 import { runReplay } from "./replay.js";
 import { runExport } from "./export.js";
 
-const VERSION = "0.0.1";
+const VERSION = "0.1.0";
 const CLI_ENTRY = fileURLToPath(import.meta.url);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const MITM_PORT = 8080;

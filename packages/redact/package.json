@@ -1,6 +1,6 @@
 {
   "name": "@contextio/redact",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Privacy and redaction layer for LLM API calls",
   "license": "MIT",
   "type": "module",
