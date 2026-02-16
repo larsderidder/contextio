@@ -1,13 +1,14 @@
 /**
  * Argument parser for the Contextio CLI.
  *
- * Hand-rolled to keep the project zero external dependencies.
- * Supports subcommands, boolean flags, and key=value options.
+ * Hand-rolled for zero dependencies, with Commander used only for
+ * version and help display.
  */
 
-// --- Shared proxy options (used by both `proxy` and `proxy -- cmd`) ---
+import { Command } from "commander";
 
-interface ProxyOptions {
+// Re-export types for external use
+export interface ProxyOptions {
   port: number;
   bind: string;
   redact: boolean;
@@ -23,8 +24,48 @@ interface ProxyOptions {
 
 export interface ProxyArgs extends ProxyOptions {
   command: "proxy";
-  /** Command to wrap (everything after --). Null means standalone proxy. */
   wrap: string[] | null;
+}
+
+export interface AttachArgs {
+  command: "attach";
+  port: number;
+  wrap: string[];
+}
+
+export interface BackgroundArgs {
+  command: "background";
+  action: "start" | "stop" | "status";
+}
+
+export interface MonitorArgs {
+  command: "monitor";
+  session: string | null;
+  last: string | null;
+  source: string | null;
+}
+
+export interface InspectArgs {
+  command: "inspect";
+  session: string | null;
+  last: boolean;
+  source: string | null;
+  full: boolean;
+}
+
+export interface ReplayArgs {
+  command: "replay";
+  captureFile: string;
+  diff: boolean;
+  model: string | null;
+}
+
+export interface ExportArgs {
+  command: "export";
+  session: string | null;
+  last: boolean;
+  outputPath: string | null;
+  redact: boolean;
 }
 
 export interface HelpArgs {
@@ -40,25 +81,17 @@ export interface DoctorArgs {
   command: "doctor";
 }
 
-export interface AttachArgs {
-  command: "attach";
-  port: number;
-  /** The command and its arguments. */
-  wrap: string[];
-}
-
-export interface BackgroundArgs {
-  command: "background";
-  action: "start" | "stop" | "status";
-}
-
 export type ParsedArgs =
   | ProxyArgs
+  | AttachArgs
+  | BackgroundArgs
+  | MonitorArgs
+  | InspectArgs
+  | ReplayArgs
+  | ExportArgs
   | HelpArgs
   | VersionArgs
-  | DoctorArgs
-  | AttachArgs
-  | BackgroundArgs;
+  | DoctorArgs;
 
 export interface ParseError {
   error: string;
@@ -70,78 +103,67 @@ export function isError(result: ParseResult): result is ParseError {
   return "error" in result;
 }
 
-const PROXY_HELP = `
-ctxio proxy [options] [-- <command> [args...]]
+// --- Help text using Commander ---
 
-Start the LLM API proxy. If a command is given after --, the proxy starts,
-sets ANTHROPIC_BASE_URL / OPENAI_BASE_URL to route through it, runs the
-command, and shuts down when it exits. Codex is handled via mitmproxy
-(https_proxy) because subscription mode does not honor base URL overrides.
+const program = new Command();
 
-Options:
-  --port <number>        Port to listen on (default: 4040, env: CONTEXT_PROXY_PORT)
-  --bind <host>          Bind address (default: 127.0.0.1, env: CONTEXT_PROXY_BIND_HOST)
-  --redact               Enable PII/secret redaction (default preset: pii)
-  --redact-preset <name> Preset: secrets, pii, strict (default: pii)
-  --redact-policy <path> Path to a redaction policy JSON file
-  --redact-reversible    Restore redacted values in responses (transparent mode)
-  --no-log               Disable capture logging (logging is on by default)
-  --log-dir <path>       Directory for capture files (default: ~/.contextio/captures)
-  --log-max-sessions <n> Keep only the last N sessions (default: 0 = unlimited)
-  --verbose              Show detailed plugin activity and per-request traffic logs
-  -h, --help             Show this help
-
-Examples:
-  ctxio proxy                                Start proxy with logging on :4040
-  ctxio proxy --redact                       Add PII redaction
-  ctxio proxy --redact -- claude             Wrap claude with redaction
-  ctxio proxy -- pi                          Wrap pi with logging
-  ctxio proxy --redact -- aider --model opus Wrap aider with options
-  ctxio proxy --no-log                       Bare proxy, no logging
-`.trim();
-
-const ATTACH_HELP = `
-ctxio attach [options] <command> [args...]
-
-Run a command routed through an already-running proxy. The proxy must be
-started separately (e.g. 'ctxio proxy --redact-reversible' in another
-terminal). Attach sets the right env vars, spawns the command, and exits
-when it finishes. It does not manage the proxy lifecycle.
-
-Options:
-  --port <number>  Port the proxy is listening on (default: 4040)
-  -h, --help       Show this help
-
-Examples:
-  ctxio attach claude                   Attach claude to running proxy
-  ctxio attach aider --model opus       Attach aider with options
-  ctxio attach --port 5050 claude       Use non-default port
-`.trim();
-
-const MAIN_HELP = `
+export function getHelp(topic?: string | null): string {
+  // Use Commander to generate help
+  try {
+    const helpCmd = new Command();
+    helpCmd.exitOverride().configureOutput({ writeErr: () => {}, writeOut: () => {} });
+    helpCmd
+      .name("ctxio")
+      .description("LLM API proxy toolkit")
+      .version("0.0.1")
+      .command("proxy", { isDefault: true })
+      .description("Start the LLM API proxy")
+      .option("-p, --port <number>", "Port to listen on", "4040")
+      .option("--bind <host>", "Bind address", "127.0.0.1")
+      .option("-r, --redact", "Enable PII/secret redaction")
+      .option("-P, --preset <name>", "Preset: secrets, pii, strict", "pii")
+      .option("-f, --redact-policy <path>", "Policy file")
+      .option("-R, --redact-reversible", "Restore redacted values")
+      .option("--no-log", "Disable capture logging")
+      .option("--log-dir <path>", "Capture directory")
+      .option("--log-max-sessions <n>", "Max sessions", "0")
+      .option("--verbose", "Show detailed activity")
+      .argument("[args...]", "Command to wrap");
+    
+    if (topic) {
+      // Try to get help for specific command
+      if (topic === "proxy") {
+        return helpCmd.command("proxy").helpInformation();
+      }
+      return `Unknown help topic: ${topic}`;
+    }
+    return helpCmd.helpInformation();
+  } catch {
+    // Fallback to simple help
+  }
+  
+  return `
 ctxio - LLM API proxy toolkit
 
 Usage:
   ctxio <command> [options]
-  ctxio proxy [options]
-  ctxio attach <command> [args...]
 
 Commands:
   proxy      Start the LLM API proxy
   attach     Run a command through an already-running proxy
   background Manage a detached shared proxy process
-  doctor     Run local diagnostics (ports, mitmproxy, certs, capture dir)
+  monitor    Watch capture directory for live API traffic
+  inspect    Inspect session prompts and tool definitions
+  replay     Re-send captured requests to the API
+  export     Bundle session captures into a shareable file
+  doctor     Run local diagnostics
   version    Show version
-  help       Show help for a command
 
-Run 'ctxio help <command>' for details on a specific command.
+Run 'ctxio help <command>' for details.
 `.trim();
-
-export function getHelp(topic: string | null): string {
-  if (topic === "proxy") return PROXY_HELP;
-  if (topic === "attach") return ATTACH_HELP;
-  return MAIN_HELP;
 }
+
+// --- Parser ---
 
 export function parseArgs(argv: string[]): ParseResult {
   // Strip node and script path
@@ -153,8 +175,14 @@ export function parseArgs(argv: string[]): ParseResult {
 
   const sub = args[0];
 
+  // Handle version
   if (sub === "--version" || sub === "-v" || sub === "version") {
     return { command: "version" };
+  }
+
+  // Handle help
+  if (sub === "--help" || sub === "-h" || sub === "help") {
+    return { command: "help", topic: args[1] ?? null };
   }
 
   if (sub === "doctor") {
@@ -164,16 +192,9 @@ export function parseArgs(argv: string[]): ParseResult {
   if (sub === "background") {
     const action = args[1] ?? "status";
     if (action !== "start" && action !== "stop" && action !== "status") {
-      return {
-        error:
-          "background requires one of: start, stop, status",
-      };
+      return { error: "background requires one of: start, stop, status" };
     }
     return { command: "background", action };
-  }
-
-  if (sub === "--help" || sub === "-h" || sub === "help") {
-    return { command: "help", topic: args[1] ?? null };
   }
 
   if (sub === "proxy") {
@@ -184,19 +205,35 @@ export function parseArgs(argv: string[]): ParseResult {
     return parseAttachArgs(args.slice(1));
   }
 
-  return { error: `Unknown command: ${sub}\n\n${MAIN_HELP}` };
+  if (sub === "monitor") {
+    return parseMonitorArgs(args.slice(1));
+  }
+
+  if (sub === "inspect") {
+    return parseInspectArgs(args.slice(1));
+  }
+
+  if (sub === "replay") {
+    return parseReplayArgs(args.slice(1));
+  }
+
+  if (sub === "export") {
+    return parseExportArgs(args.slice(1));
+  }
+
+  return { error: `Unknown command: ${sub}` };
 }
 
 function parseProxyArgs(args: string[]): ParseResult {
   const result: ProxyArgs = {
     command: "proxy",
-    port: 0, // 0 means "use default from env or 4040"
+    port: 0,
     bind: "",
     redact: false,
     redactPreset: "pii",
     redactPolicy: null,
     redactReversible: false,
-    log: true, // logging on by default
+    log: true,
     noLog: false,
     logDir: null,
     logMaxSessions: 0,
@@ -208,11 +245,11 @@ function parseProxyArgs(args: string[]): ParseResult {
   while (i < args.length) {
     const arg = args[i];
 
-    // -- separator: everything after is the command to wrap
+    // Handle -- separator
     if (arg === "--") {
       const rest = args.slice(i + 1);
       if (rest.length === 0) {
-        return { error: "No command specified after --\n\n" + PROXY_HELP };
+        return { error: "No command specified after --" };
       }
       result.wrap = rest;
       break;
@@ -222,6 +259,7 @@ function parseProxyArgs(args: string[]): ParseResult {
       return { command: "help", topic: "proxy" };
     }
 
+    // Port
     if (arg === "--port" || arg === "-p") {
       i++;
       if (i >= args.length) return { error: "--port requires a value" };
@@ -230,13 +268,19 @@ function parseProxyArgs(args: string[]): ParseResult {
         return { error: `Invalid port: ${args[i]}` };
       }
       result.port = port;
-    } else if (arg === "--bind") {
+    }
+    // Bind
+    else if (arg === "--bind") {
       i++;
       if (i >= args.length) return { error: "--bind requires a value" };
       result.bind = args[i];
-    } else if (arg === "--redact") {
+    }
+    // Redact
+    else if (arg === "--redact" || arg === "-r") {
       result.redact = true;
-    } else if (arg === "--redact-preset") {
+    }
+    // Preset
+    else if (arg === "--redact-preset" || arg === "--preset" || arg === "-P") {
       i++;
       if (i >= args.length) return { error: "--redact-preset requires a value" };
       const valid = ["secrets", "pii", "strict"];
@@ -245,36 +289,43 @@ function parseProxyArgs(args: string[]): ParseResult {
       }
       result.redactPreset = args[i];
       result.redact = true;
-    } else if (arg === "--redact-policy") {
+    }
+    // Policy file
+    else if (arg === "--redact-policy" || arg === "-f") {
       i++;
       if (i >= args.length) return { error: "--redact-policy requires a value" };
       result.redactPolicy = args[i];
       result.redact = true;
-    } else if (arg === "--redact-reversible") {
+    }
+    // Reversible
+    else if (arg === "--redact-reversible" || arg === "-R") {
       result.redactReversible = true;
       result.redact = true;
-    } else if (arg === "--no-log") {
+    }
+    // No log
+    else if (arg === "--no-log") {
       result.log = false;
       result.noLog = true;
-    } else if (arg === "--log-dir") {
+    }
+    // Log dir
+    else if (arg === "--log-dir") {
       i++;
       if (i >= args.length) return { error: "--log-dir requires a value" };
       result.logDir = args[i];
-      result.log = true; // --log-dir implies --log
-    } else if (arg === "--log-max-sessions") {
+      result.log = true;
+    }
+    // Log max sessions
+    else if (arg === "--log-max-sessions") {
       i++;
       if (i >= args.length) return { error: "--log-max-sessions requires a value" };
-      const n = parseInt(args[i], 10);
-      if (isNaN(n) || n < 0) {
-        return { error: `Invalid value for --log-max-sessions: ${args[i]}` };
-      }
-      result.logMaxSessions = n;
-    } else if (arg === "--verbose") {
+      result.logMaxSessions = parseInt(args[i], 10) || 0;
+    }
+    // Verbose
+    else if (arg === "--verbose") {
       result.verbose = true;
-    } else if (arg.startsWith("-")) {
-      return { error: `Unknown option: ${arg}\n\n${PROXY_HELP}` };
-    } else {
-      return { error: `Unexpected argument: ${arg}\n\n${PROXY_HELP}` };
+    }
+    else {
+      return { error: `Unknown option: ${arg}` };
     }
 
     i++;
@@ -284,10 +335,10 @@ function parseProxyArgs(args: string[]): ParseResult {
 }
 
 function parseAttachArgs(args: string[]): ParseResult {
-  let port = 0; // 0 means use default (4040)
+  let port = 4040;
+  const wrap: string[] = [];
   let i = 0;
 
-  // Parse options before the command
   while (i < args.length) {
     const arg = args[i];
 
@@ -298,27 +349,180 @@ function parseAttachArgs(args: string[]): ParseResult {
     if (arg === "--port" || arg === "-p") {
       i++;
       if (i >= args.length) return { error: "--port requires a value" };
-      const p = parseInt(args[i], 10);
-      if (isNaN(p) || p < 0 || p > 65535) {
-        return { error: `Invalid port: ${args[i]}` };
-      }
-      port = p;
-      i++;
-      continue;
-    }
-
-    // First non-option is the command; everything from here is the wrap
-    if (!arg.startsWith("-")) {
+      port = parseInt(args[i], 10) || 4040;
+    } else if (!arg.startsWith("-")) {
+      wrap.push(...args.slice(i));
       break;
+    } else {
+      return { error: `Unknown option: ${arg}` };
     }
 
-    return { error: `Unknown option: ${arg}\n\n${ATTACH_HELP}` };
+    i++;
   }
 
-  const wrap = args.slice(i);
   if (wrap.length === 0) {
-    return { error: `No command specified\n\n${ATTACH_HELP}` };
+    return { error: "No command specified" };
   }
 
   return { command: "attach", port, wrap };
+}
+
+function parseMonitorArgs(args: string[]): ParseResult {
+  let session: string | null = null;
+  let last: string | null = null;
+  let source: string | null = null;
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "--help" || arg === "-h") {
+      return { command: "help", topic: "monitor" };
+    }
+
+    if (arg === "--session") {
+      i++;
+      if (i >= args.length) return { error: "--session requires a value" };
+      session = args[i];
+    } else if (arg === "--last") {
+      i++;
+      if (i >= args.length) return { error: "--last requires a value" };
+      last = args[i];
+    } else if (arg === "--source") {
+      i++;
+      if (i >= args.length) return { error: "--source requires a value" };
+      source = args[i];
+    } else if (arg.startsWith("-")) {
+      return { error: `Unknown option: ${arg}` };
+    } else {
+      return { error: `Unexpected argument: ${arg}` };
+    }
+
+    i++;
+  }
+
+  return { command: "monitor", session, last, source };
+}
+
+function parseInspectArgs(args: string[]): ParseResult {
+  let session: string | null = null;
+  let last = false;
+  let source: string | null = null;
+  let full = false;
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "--help" || arg === "-h") {
+      return { command: "help", topic: "inspect" };
+    }
+
+    if (arg === "--session") {
+      i++;
+      if (i >= args.length) return { error: "--session requires a value" };
+      session = args[i];
+    } else if (arg === "--last") {
+      last = true;
+    } else if (arg === "--source") {
+      i++;
+      if (i >= args.length) return { error: "--source requires a value" };
+      source = args[i];
+    } else if (arg === "--full") {
+      full = true;
+    } else if (arg.startsWith("-")) {
+      return { error: `Unknown option: ${arg}` };
+    } else {
+      return { error: `Unexpected argument: ${arg}` };
+    }
+
+    i++;
+  }
+
+  return { command: "inspect", session, last, source, full };
+}
+
+function parseReplayArgs(args: string[]): ParseResult {
+  let captureFile = "";
+  let diff = false;
+  let model: string | null = null;
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "--help" || arg === "-h") {
+      return { command: "help", topic: "replay" };
+    }
+
+    if (arg === "--diff") {
+      diff = true;
+    } else if (arg === "--model") {
+      i++;
+      if (i >= args.length) return { error: "--model requires a value" };
+      model = args[i];
+    } else if (arg.startsWith("-")) {
+      return { error: `Unknown option: ${arg}` };
+    } else {
+      if (!captureFile) {
+        captureFile = arg;
+      } else {
+        return { error: `Unexpected argument: ${arg}` };
+      }
+    }
+
+    i++;
+  }
+
+  if (!captureFile) {
+    return { error: "No capture file specified" };
+  }
+
+  return { command: "replay", captureFile, diff, model };
+}
+
+function parseExportArgs(args: string[]): ParseResult {
+  let session: string | null = null;
+  let last = false;
+  let outputPath: string | null = null;
+  let redact = false;
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "--help" || arg === "-h") {
+      return { command: "help", topic: "export" };
+    }
+
+    if (arg === "--session") {
+      i++;
+      if (i >= args.length) return { error: "--session requires a value" };
+      session = args[i];
+    } else if (arg === "--last") {
+      last = true;
+    } else if (arg === "-o" || arg === "--output") {
+      i++;
+      if (i >= args.length) return { error: "--output requires a value" };
+      outputPath = args[i];
+    } else if (arg === "--redact") {
+      redact = true;
+    } else if (arg.startsWith("-")) {
+      return { error: `Unknown option: ${arg}` };
+    } else {
+      if (!session) {
+        session = arg;
+      } else {
+        return { error: `Unexpected argument: ${arg}` };
+      }
+    }
+
+    i++;
+  }
+
+  if (!session && !last) {
+    return { error: "Must specify session ID or --last" };
+  }
+
+  return { command: "export", session, last, outputPath, redact };
 }
