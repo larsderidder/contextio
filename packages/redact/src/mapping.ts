@@ -1,12 +1,12 @@
 /**
- * Replacement mapping for reversible redaction.
+ * Bidirectional replacement mapping for reversible redaction.
  *
- * Tracks original -> placeholder mappings so that redacted values in LLM
- * responses can be rehydrated back to the original text before returning
- * to the client.
+ * Tracks original value -> placeholder mappings (e.g. "john@test.com" ->
+ * "[EMAIL_1]") so the proxy can restore originals in LLM responses.
  *
- * Mappings persist for the lifetime of the plugin instance (one proxy run),
- * so the same value always maps to the same placeholder across requests.
+ * Mappings persist for the lifetime of the session. The same value always
+ * maps to the same placeholder, even across multiple requests in the
+ * same session.
  */
 
 /**

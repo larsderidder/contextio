@@ -106,7 +106,10 @@ export interface PathMatcher {
 
 /**
  * Strip // comments and trailing commas from JSON-with-comments.
- * Good enough for config files; not a full JSONC parser.
+ *
+ * Not a full JSONC parser. Only handles // comments on their own lines
+ * and trailing commas before } or ]. Good enough for human-written
+ * config files where comments don't appear inside string values.
  */
 function stripJsonComments(text: string): string {
   // Remove single-line comments (// ...) that aren't inside strings.
@@ -132,10 +135,11 @@ function parsePath(path: string): PathMatcher {
 }
 
 /**
- * Compile a JSON rule into an internal RedactionRule with context support.
+ * Compile a policy JSON rule into an internal RedactionRule.
  *
- * Patterns can start with (?i) to request case-insensitive matching.
- * This is converted to the "i" flag since JS doesn't support inline flags.
+ * Patterns are always compiled with the "g" flag. If the pattern string
+ * starts with `(?i)`, the "i" flag is also added (JS doesn't support
+ * inline flags natively).
  */
 function compileRule(json: PolicyRuleJson): RedactionRule {
   let flags = "g";
@@ -164,7 +168,13 @@ function compileRule(json: PolicyRuleJson): RedactionRule {
 }
 
 /**
- * Compile a PolicyJson into a CompiledPolicy ready for the redaction engine.
+ * Compile a PolicyJson into a CompiledPolicy.
+ *
+ * If the policy extends a preset, preset rules are included first (so
+ * custom rules run after built-in ones). Allowlists and path matchers
+ * are compiled into their runtime forms.
+ *
+ * @throws If `extends` references an unknown preset name.
  */
 export function compilePolicy(json: PolicyJson): CompiledPolicy {
   // Start with preset rules if extending

@@ -1,19 +1,22 @@
 /**
  * Streaming rehydration for SSE responses.
  *
- * Replaces placeholders like [EMAIL_1] with original values in SSE
- * streams. Works with any provider by extracting text content from
- * JSON fields, detecting split placeholders across events, and
- * replacing in-place when possible.
+ * The challenge: placeholders like `[EMAIL_1]` can be split across
+ * multiple SSE events (the LLM might stream "[EMA" in one chunk and
+ * "IL_1]" in the next). This module handles that by:
  *
- * When no placeholders are present, original lines pass through
- * unchanged. When rehydration occurs, the first content line's
- * structure is preserved and used as the template for the output.
+ * 1. Extracting text content from SSE `data:` lines (provider-agnostic)
+ * 2. Buffering content when a partial placeholder is detected (trailing "[")
+ * 3. Replacing complete placeholders with originals from the ReplacementMap
+ * 4. Preserving the JSON structure of each SSE event
+ *
+ * When no placeholders are present in a chunk, it passes through unchanged
+ * (zero allocation fast path).
  */
 
 import type { ReplacementMap } from "./mapping.js";
 
-/** Escape a string for embedding inside a JSON string value. */
+/** Escape a string for safe embedding inside a JSON string value. */
 function jsonEscape(s: string): string {
   return s
     .replace(/\\/g, "\\\\")
@@ -23,18 +26,31 @@ function jsonEscape(s: string): string {
     .replace(/\t/g, "\\t");
 }
 
-/** Content extraction result. */
+/**
+ * Result of extracting text content from a JSON SSE event.
+ *
+ * Contains the text value plus enough context to reconstruct the
+ * original line with modified content.
+ */
 interface Extracted {
+  /** The extracted text content (JSON-unescaped). */
   text: string;
-  /** The full regex match string (e.g. `"text":"hello"`) for replacement. */
+  /** The full matched substring (e.g. `"text":"hello"`) for string replacement. */
   fullMatch: string;
-  /** Just the field key portion (e.g. `"text":"`). */
+  /** The field key prefix (e.g. `"text":"`) for reconstructing the line. */
   prefix: string;
 }
 
 /**
- * Try to extract LLM text content from a JSON string.
- * Returns the extracted text and match info, or null.
+ * Extract text content from a JSON SSE event line.
+ *
+ * Recognizes content fields from all three providers:
+ * - Anthropic: `text_delta` events with `"text"` field
+ * - Anthropic: `thinking_delta` events with `"thinking"` field
+ * - OpenAI: `delta` objects with `"content"` field
+ * - Gemini: `parts` arrays with `"text"` field
+ *
+ * @returns Extracted text and match context, or null for non-content events.
  */
 function extractContent(json: string): Extracted | null {
   let m: RegExpMatchArray | null;
@@ -58,21 +74,46 @@ function extractContent(json: string): Extracted | null {
   return null;
 }
 
+/**
+ * Create a stateful stream rehydrator for one session.
+ *
+ * Call `onChunk()` for each SSE chunk from the upstream. It buffers
+ * partial lines and partial placeholders, replacing complete ones with
+ * originals. Call `onEnd()` when the stream finishes to flush any
+ * remaining buffered content.
+ *
+ * @param map - The session's replacement map (original <-> placeholder).
+ * @returns Chunk and end handlers.
+ */
 export function createStreamRehydrator(map: ReplacementMap): {
   onChunk: (chunk: Buffer) => Buffer;
   onEnd: () => Buffer | null;
 } {
-  let lineBuf = "";
-  let contentBuf = "";
-  let held: { line: string; extracted: Extracted | null }[] = [];
-  let outputParts: string[] = [];
+  let lineBuf = "";       // Incomplete line from previous chunk
+  let contentBuf = "";    // Accumulated text content (may span SSE events)
+  let held: { line: string; extracted: Extracted | null }[] = [];  // Buffered lines awaiting placeholder resolution
+  let outputParts: string[] = [];  // Completed output lines ready to emit
 
+  /**
+   * Check if contentBuf ends with a partial placeholder (has "[" without
+   * a closing "]"). If so, we need to buffer more content before
+   * attempting replacement.
+   */
   function hasTrailingPartial(): boolean {
     const i = contentBuf.lastIndexOf("[");
     if (i === -1) return false;
     return contentBuf.indexOf("]", i) === -1;
   }
 
+  /**
+   * Flush held lines to output. When `force` is false, only flushes if
+   * there's no trailing partial placeholder. When `force` is true, flushes
+   * everything regardless.
+   *
+   * If placeholders were replaced, all rehydrated text goes into the first
+   * content line; subsequent content lines get emptied. This avoids
+   * producing duplicate text when a placeholder spans multiple events.
+   */
   function flushHeld(force: boolean): void {
     if (held.length === 0) return;
     if (!force && hasTrailingPartial()) return;

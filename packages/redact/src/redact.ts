@@ -27,7 +27,10 @@ export function createStats(): RedactionStats {
 // --- Context word matching ---
 
 /**
- * Check if any context word appears near position `start`..`end` in `text`.
+ * Check if any context word appears within `window` characters of a match.
+ *
+ * This is how context-gated rules work: a pattern like SSN (XXX-XX-XXXX)
+ * only fires when words like "ssn" or "social security" appear nearby.
  */
 function hasContextNearby(
   text: string,
@@ -45,8 +48,7 @@ function hasContextNearby(
   return false;
 }
 
-// --- Allowlist matching ---
-
+/** Check if a matched value is in the allowlist (exact string or regex pattern). */
 function isAllowlisted(
   match: string,
   allowlistStrings: Set<string>,
@@ -60,11 +62,12 @@ function isAllowlisted(
   return false;
 }
 
-// --- Path matching ---
+// --- JSON path matching ---
 
 /**
- * Check if a JSON path (as segments) matches a path matcher.
- * Supports "*" as a wildcard for a single segment.
+ * Check if a JSON path matches a path matcher pattern.
+ * Segments must match exactly, except "*" which matches any single segment.
+ * Both arrays must be the same length.
  */
 function pathMatches(segments: string[], matcher: string[]): boolean {
   if (segments.length !== matcher.length) return false;
@@ -75,6 +78,7 @@ function pathMatches(segments: string[], matcher: string[]): boolean {
   return true;
 }
 
+/** Determine if a value at this JSON path should be redacted, per "only"/"skip" config. */
 function shouldRedactPath(
   path: string[],
   onlyMatchers: { segments: string[] }[] | null,
@@ -164,15 +168,22 @@ function redactString(
 // --- Recursive walker ---
 
 /**
- * Recursively walk a JSON value, applying policy rules to string leaves.
- * Respects path filtering if configured.
- */
-/**
- * Recursively walk a JSON value, applying policy rules to string leaves.
- * Respects path filtering if configured.
+ * Recursively walk a JSON value and apply redaction rules to string leaves.
  *
- * When `map` is provided, redacted values are tracked for later rehydration.
- * The same original value always maps to the same placeholder within a map.
+ * Preserves the original structure; returns a new object tree with
+ * sensitive strings replaced. Respects path filtering ("only" and "skip")
+ * when configured in the policy.
+ *
+ * When `map` is provided (reversible mode), redacted values are tracked
+ * so they can be restored in the response. The same original always maps
+ * to the same placeholder within a map.
+ *
+ * @param value - The value to redact (string, object, array, or primitive).
+ * @param policy - Compiled redaction policy with rules and path config.
+ * @param stats - Mutable stats object; updated with replacement counts.
+ * @param currentPath - Current JSON path segments (used internally for recursion).
+ * @param map - Optional replacement map for reversible mode.
+ * @returns A new value with sensitive strings replaced. Primitives pass through unchanged.
  */
 export function redactWithPolicy(
   value: unknown,
@@ -222,10 +233,10 @@ export function redactWithPolicy(
 // --- Legacy API (backward compatible) ---
 
 /**
- * Recursively walk a JSON value, applying redaction rules to all strings.
- * This is the simple API without path filtering or context words.
+ * Simple redaction without path filtering or context words.
  *
- * Returns a new value (does not mutate the original).
+ * Applies all rules to every string leaf in the value tree. Provided
+ * for backward compatibility; new code should use {@link redactWithPolicy}.
  */
 export function redactValue(
   value: unknown,

@@ -31,39 +31,41 @@ import type { PresetName } from "./presets.js";
 import { createStats, redactWithPolicy } from "./redact.js";
 import { createStreamRehydrator } from "./stream.js";
 
+/** Configuration for {@link createRedactPlugin}. */
 export interface RedactPluginConfig {
-  /** Use a built-in preset. Default: "pii". */
+  /** Built-in preset to use. Default: "pii". */
   preset?: PresetName;
-  /** Path to a policy JSON file. Overrides preset. */
+  /** Path to a policy JSON(C) file. Overrides `preset`. */
   policyFile?: string;
-  /** A pre-compiled policy object. Overrides preset and policyFile. */
+  /** Pre-compiled policy object. Overrides both `preset` and `policyFile`. */
   policy?: CompiledPolicy;
   /**
-   * When true, redacted values are tracked per session and restored in
-   * responses. The LLM sees placeholders like [EMAIL_1]; the client sees
-   * the originals. Requires session IDs in the URL path.
-   * Default: false (one-way redaction).
+   * Enable reversible redaction. When true, the plugin tracks
+   * original values per session and restores them in LLM responses.
+   * The LLM sees `[EMAIL_1]`; the client sees the original.
+   *
+   * Requires session IDs in the URL path (set automatically by the CLI).
+   * Default: false (one-way, strip and forget).
    */
   reversible?: boolean;
   /**
-   * Idle time in milliseconds before a session's replacement map is evicted.
-   * Only relevant when reversible is true. Default: 30 minutes.
+   * How long to keep a session's replacement map after its last request,
+   * in milliseconds. Only used when `reversible` is true.
+   * Default: 30 minutes.
    */
   sessionTtlMs?: number;
-  /** When true, log redaction stats to stderr after each request. */
+  /** Log redaction stats to stderr after each request. */
   verbose?: boolean;
 }
 
-/** Internal session state for reversible mode. */
+/** Per-session state for reversible mode: mapping table + stream rehydrator. */
 interface SessionState {
   map: ReplacementMap;
   rehydrator: ReturnType<typeof createStreamRehydrator>;
   lastSeen: number;
 }
 
-/**
- * Resolve the effective policy from config options.
- */
+/** Resolve effective policy: explicit policy > policy file > preset (default: "pii"). */
 function resolvePolicy(config?: RedactPluginConfig): CompiledPolicy {
   if (config?.policy) return config.policy;
   if (config?.policyFile) return loadPolicyFile(config.policyFile);
@@ -95,8 +97,9 @@ export function createRedactPlugin(config?: RedactPluginConfig): ProxyPlugin {
   let lastEviction = Date.now();
 
   /**
-   * Get or create session state for a given session ID.
-   * Uses "__default__" for requests without a session ID.
+   * Get or create session state. Uses "__default__" for requests
+   * without a session ID. Also evicts stale sessions periodically
+   * (at most once per minute) to prevent unbounded memory growth.
    */
   function getSession(sessionId: string | null): SessionState {
     const key = sessionId ?? "__default__";
