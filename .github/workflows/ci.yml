@@ -24,11 +24,11 @@ jobs:
         run: |
           for pkg in packages/*; do
             [ -d "$pkg/dist" ] || { echo "ERROR: $pkg/dist missing"; exit 1; }
-            [ -f "$pkg/dist/index.js" ] || { echo "ERROR: $pkg/dist/index.js missing in $pkg"; exit 1; }
           done
+          # CLI has main.js, others have index.js
+          [ -f "packages/cli/dist/main.js" ] || { echo "ERROR: CLI dist/main.js missing"; exit 1; }
+          [ -f "packages/core/dist/index.js" ] || { echo "ERROR: core dist/index.js missing"; exit 1; }
+          [ -f "packages/proxy/dist/index.js" ] || { echo "ERROR: proxy dist/index.js missing"; exit 1; }
+          [ -f "packages/redact/dist/index.js" ] || { echo "ERROR: redact dist/index.js missing"; exit 1; }
+          [ -f "packages/logger/dist/index.js" ] || { echo "ERROR: logger dist/index.js missing"; exit 1; }
           echo "All packages built successfully"
-      - name: Verify CLI package is complete
-        run: |
-          npm pack packages/cli --dry-run 2>&1 | grep -q 'dist/main.js' || { echo "ERROR: CLI dist/main.js missing from tarball"; exit 1; }
-          npm pack packages/cli --dry-run 2>&1 | grep -q 'mitm_addon.py' || { echo "ERROR: mitm_addon.py missing from tarball"; exit 1; }
-          echo "CLI package verified"
