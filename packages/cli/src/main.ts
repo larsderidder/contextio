@@ -24,6 +24,10 @@ import type { PresetName } from "@contextio/redact";
 import { getHelp, isError, parseArgs } from "./args.js";
 import type { AttachArgs, ProxyArgs } from "./args.js";
 import { getToolEnv } from "./tools.js";
+import { runMonitor } from "./monitor.js";
+import { runInspect } from "./inspect.js";
+import { runReplay } from "./replay.js";
+import { runExport } from "./export.js";
 
 const VERSION = "0.0.1";
 const CLI_ENTRY = fileURLToPath(import.meta.url);
@@ -229,20 +233,21 @@ async function waitForPort(
 async function runDoctor(): Promise<number> {
   console.log(`ctxio doctor v${VERSION}`);
 
-  // mitmproxy is only needed for Codex subscription mode, so report as
-  // informational rather than suggesting something is broken.
+  // mitmproxy is needed for tools that ignore base URL overrides
+  // (Copilot, OpenCode). It runs in upstream mode, chaining into the
+  // contextio proxy for full redaction and logging.
   const mitmdumpPath = findBinaryOnPath("mitmdump");
   console.log(
-    `- mitmdump (Codex only): ${mitmdumpPath ?? "not found (install: pipx install mitmproxy)"}`,
+    `- mitmdump (Copilot/OpenCode): ${mitmdumpPath ?? "not found (install: pipx install mitmproxy)"}`,
   );
 
   const certPath = join(homedir(), ".mitmproxy", "mitmproxy-ca-cert.pem");
   console.log(
-    `- mitm cert (Codex only): ${fs.existsSync(certPath) ? certPath : "not present (run 'mitmdump' once to generate)"}`,
+    `- mitm cert (Copilot/OpenCode): ${fs.existsSync(certPath) ? certPath : "not present (run 'mitmdump' once to generate)"}`,
   );
 
   console.log(
-    `- mitm addon (Codex only): ${fs.existsSync(MITM_ADDON_PATH) ? MITM_ADDON_PATH : "not found"}`,
+    `- mitm addon (Copilot/OpenCode): ${fs.existsSync(MITM_ADDON_PATH) ? MITM_ADDON_PATH : "not found"}`,
   );
 
   const captureDir = join(homedir(), ".contextio", "captures");
@@ -553,12 +558,6 @@ async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
     ...toolEnv.env,
   };
 
-  if (toolEnv.needsMitm && args.redact) {
-    console.error(
-      "Warning: --redact is not applied in Codex subscription mode (traffic flows through mitmproxy).",
-    );
-  }
-
   if (toolEnv.needsMitm && childEnv.SSL_CERT_FILE === "") {
     const certPath = join(homedir(), ".mitmproxy", "mitmproxy-ca-cert.pem");
     if (fs.existsSync(certPath)) {
@@ -640,23 +639,23 @@ async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
       );
     }
 
+    // mitmproxy terminates TLS, the addon rewrites requests to route
+    // through the contextio proxy for redaction and logging.
     console.log(
-      "Starting mitmproxy (required for Codex HTTPS interception)...",
+      `Starting mitmproxy (routing through proxy on :${proxyPort})...`,
     );
     mitmProcess = spawn(
       "mitmdump",
       [
-        "-s",
-        MITM_ADDON_PATH,
+        "-s", MITM_ADDON_PATH,
         "--quiet",
-        "--listen-port",
-        String(mitmPort),
+        "--listen-port", String(mitmPort),
       ],
       {
         stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
-          CONTEXTIO_CAPTURE_DIR: captureDir,
+          CONTEXTIO_PROXY_URL: `http://127.0.0.1:${proxyPort}`,
           CONTEXTIO_SOURCE: command,
           CONTEXTIO_SESSION_ID: sessionId,
         },
@@ -703,8 +702,8 @@ async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
  * Sets env vars, spawns the command, exits when it finishes.
  * Does not start or stop the proxy.
  *
- * For tools that need mitmproxy (copilot), starts mitmproxy as a child
- * and routes HTTPS traffic through it for logging.
+ * For tools that need mitmproxy (Copilot, OpenCode), starts mitmproxy
+ * in upstream mode, chaining HTTPS traffic through to the proxy.
  */
 async function runAttach(args: AttachArgs): Promise<void> {
   const proxyPort = args.port || 4040;
@@ -713,8 +712,8 @@ async function runAttach(args: AttachArgs): Promise<void> {
   const proxyUrl = `http://127.0.0.1:${proxyPort}`;
   const toolEnv = getToolEnv(command, proxyUrl, sessionId);
 
-  // Tools that don't need mitmproxy require a running contextio proxy
-  if (!toolEnv.needsMitm && !(await isPortListening(proxyPort))) {
+  // A running contextio proxy is always required (mitmproxy chains into it)
+  if (!(await isPortListening(proxyPort))) {
     console.error(`No proxy running on port ${proxyPort}.`);
     console.error(`Start one first: contextio proxy [options]`);
     process.exit(1);
@@ -722,7 +721,7 @@ async function runAttach(args: AttachArgs): Promise<void> {
 
   console.log(`Session: ${sessionId}`);
   if (toolEnv.needsMitm) {
-    console.log(`Mode:    mitmproxy (logging only, no redaction)`);
+    console.log(`Mode:    mitmproxy (upstream to proxy)`);
   } else {
     console.log(`Proxy:   port ${proxyPort}`);
   }
@@ -735,7 +734,7 @@ async function runAttach(args: AttachArgs): Promise<void> {
     if (mitmProcess && !mitmProcess.killed) mitmProcess.kill();
   };
 
-  // Start mitmproxy if needed (for logging tools like copilot)
+  // Start mitmproxy if needed; addon rewrites requests to the proxy
   if (toolEnv.needsMitm) {
     if (!fs.existsSync(MITM_ADDON_PATH)) {
       console.error(`mitm addon not found: ${MITM_ADDON_PATH}`);
@@ -766,17 +765,20 @@ async function runAttach(args: AttachArgs): Promise<void> {
     childEnv.http_proxy = mitmUrl;
     childEnv.HTTP_PROXY = mitmUrl;
 
-    const defaultCaptureDir = join(homedir(), ".contextio", "captures");
-    console.log(`Logs:    ${defaultCaptureDir}`);
+    console.log(`Proxy:   port ${proxyPort} (via mitmproxy on :${mitmPort})`);
 
     mitmProcess = spawn(
       "mitmdump",
-      ["-s", MITM_ADDON_PATH, "--quiet", "--listen-port", String(mitmPort)],
+      [
+        "-s", MITM_ADDON_PATH,
+        "--quiet",
+        "--listen-port", String(mitmPort),
+      ],
       {
         stdio: ["ignore", "ignore", "ignore"],
         env: {
           ...process.env,
-          CONTEXTIO_CAPTURE_DIR: defaultCaptureDir,
+          CONTEXTIO_PROXY_URL: `http://127.0.0.1:${proxyPort}`,
           CONTEXTIO_SOURCE: command,
           CONTEXTIO_SESSION_ID: sessionId,
         },
@@ -857,6 +859,18 @@ async function main(): Promise<void> {
       } else {
         await runStandalone(result);
       }
+      break;
+    case "monitor":
+      await runMonitor(result);
+      break;
+    case "inspect":
+      await runInspect(result);
+      break;
+    case "replay":
+      await runReplay(result);
+      break;
+    case "export":
+      process.exit(await runExport(result));
       break;
   }
 }

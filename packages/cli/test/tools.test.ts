@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { getToolEnv } from "../src/tools.js";
+import { getToolEnv } from "../dist/tools.js";
 
 describe("getToolEnv", () => {
   const proxy = "http://127.0.0.1:4040";
@@ -30,10 +30,15 @@ describe("getToolEnv", () => {
     assert.ok(!needsMitm);
   });
 
-  it("copilot uses mitmproxy for logging", () => {
+  it("copilot uses mitmproxy upstream mode", () => {
     const { env, needsMitm } = getToolEnv("copilot", proxy);
-    assert.equal(env.https_proxy, "http://127.0.0.1:8080");
-    assert.equal(env.SSL_CERT_FILE, "");
+    assert.deepEqual(env, {});
+    assert.equal(needsMitm, true);
+  });
+
+  it("opencode uses mitmproxy upstream mode", () => {
+    const { env, needsMitm } = getToolEnv("opencode", proxy);
+    assert.deepEqual(env, {});
     assert.equal(needsMitm, true);
   });
 

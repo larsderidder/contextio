@@ -8,7 +8,11 @@
 export interface ToolEnv {
   /** Environment variables to set for the child process. */
   env: Record<string, string>;
-  /** Whether the tool needs a forward HTTPS proxy (mitmproxy). */
+  /**
+   * Whether the tool needs mitmproxy as a TLS-terminating forward proxy
+   * chained into the contextio proxy via upstream mode. This is for tools
+   * that respect HTTPS_PROXY but ignore base URL overrides.
+   */
   needsMitm?: boolean;
 }
 
@@ -63,22 +67,20 @@ export function getToolEnv(
       return { env: {} };
 
     case "copilot":
-      // Copilot CLI respects HTTPS_PROXY (uses undici ProxyAgent) but
-      // ignores OPENAI_BASE_URL. Route through mitmproxy for logging.
-      // Redaction is not applied (traffic goes direct to API).
+      // Copilot CLI ignores OPENAI_BASE_URL but respects HTTPS_PROXY.
+      // Route through mitmproxy in upstream mode, chained into the
+      // contextio proxy for full redaction and logging support.
       return {
-        env: {
-          https_proxy: "http://127.0.0.1:8080",
-          SSL_CERT_FILE: "",
-        },
+        env: {},
         needsMitm: true,
       };
 
     case "opencode":
       // OpenCode embeds multiple AI SDKs (OpenAI, Anthropic, OpenRouter).
       // Direct providers (Anthropic, OpenAI) respect *_BASE_URL, but
-      // OpenRouter and others don't. Route through mitmproxy for
-      // universal logging regardless of provider.
+      // OpenRouter and others don't. Route through mitmproxy in upstream
+      // mode so all traffic flows through the contextio proxy regardless
+      // of provider.
       return {
         env: {},
         needsMitm: true,
