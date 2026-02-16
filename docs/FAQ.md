@@ -4,14 +4,16 @@
 
 ### What does contextio do?
 
-It's a local HTTP proxy that sits between your AI coding tools (Claude CLI, Aider, etc.) and the LLM APIs they call. It logs every request and response, and optionally strips PII and secrets before they leave your machine.
+It's a local HTTP proxy that sits between your AI coding tools (Claude CLI, Aider, etc.) and the LLM APIs they call. It logs every request and response, and optionally strips PII and secrets before they leave your machine. Nothing leaves your machine, it's all local-first.
 
 ### Why would I use this?
 
+I don't know, maybe you want to:
+
 - **Audit what your tools send**: See exactly what context, prompts, and code go to the API
-- **Privacy**: Redact sensitive data (emails, SSNs, API keys) before it reaches the LLM
-- **Debugging**: Inspect token usage, system prompts, and tool definitions
-- **Compliance**: Keep local copies of all LLM interactions for review
+- **Have some privacy**: Redact sensitive data (emails, SSNs, API keys) before it reaches the LLM
+- **Debug**: Inspect token usage, system prompts, and tool definitions
+- **Do something complicated with compliance**: Keep local copies of all LLM interactions for review
 
 ### Does it work with any AI tool?
 
@@ -25,7 +27,7 @@ Minimally. The proxy adds ~1-5ms of latency for routing and plugin processing. R
 
 ### Do I need to install mitmproxy?
 
-Only if you're using tools that don't support base URL overrides (Codex, Copilot CLI, OpenCode). For Claude CLI, Aider, Gemini CLI, and most other tools, mitmproxy is not required.
+Only if you're using tools that don't support base URL overrides (Codex, Copilot CLI, OpenCode); these are a bit nasty and it was a headache to get them working at all. For Claude CLI, Aider, Gemini CLI, and most other tools, mitmproxy is not required.
 
 ```bash
 pipx install mitmproxy
@@ -148,7 +150,7 @@ LLM says:  "I've noted [EMAIL_1]"
 You see:   "I've noted john@test.com"
 ```
 
-This keeps the LLM's response coherent while still redacting the outbound request. Same value always maps to the same placeholder within a session.
+It's incredibly cool but experimental; you basically keep some context from your LLM. It's like a secret decoder ring for your LLM.  This should keep the LLM's response coherent while still redacting the outbound request. Same value always maps to the same placeholder within a session.
 
 ### Does reversible mode work with all providers?
 
@@ -396,4 +398,4 @@ This is more efficient than spinning up a new proxy for every tool invocation.
 
 ### Does contextio send telemetry?
 
-No. Zero network activity except forwarding your API requests to the upstream you specify. No analytics, no phone-home.
+No. Zero network activity except forwarding your API requests to the upstream you specify. No analytics, no ET, no phone-home.

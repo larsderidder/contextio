@@ -10,7 +10,7 @@ I built this because I get nervous sending data I don't see to LLMs. Now at leas
 
 All your stuff passes through this thing, so the proxy has zero external dependencies. Read the code, it's small.
 
-**Looking for full observability?** Check out [Context Lens](https://github.com/larsderidder/contextlens), a web-based tracing and analytics platform built on top of contextio. It adds session replay, cost tracking, and prompt engineering tools.
+**Looking for full observability?** Check out [Context Lens](https://github.com/larsderidder/contextlens), a web-based tracing and analytics platform built on top of contextio (well I'm working on porting things over).
 
 ## Install
 
