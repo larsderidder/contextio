@@ -15,6 +15,20 @@
   "files": [
     "dist/"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/larsderidder/contextio.git",
+    "directory": "packages/redact"
+  },
+  "homepage": "https://github.com/larsderidder/contextio#readme",
+  "bugs": "https://github.com/larsderidder/contextio/issues",
+  "keywords": [
+    "llm",
+    "redact",
+    "privacy",
+    "pii",
+    "security"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

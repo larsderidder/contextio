@@ -12,6 +12,20 @@
     "dist/",
     "mitm_addon.py"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/larsderidder/contextio.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/larsderidder/contextio#readme",
+  "bugs": "https://github.com/larsderidder/contextio/issues",
+  "keywords": [
+    "llm",
+    "cli",
+    "proxy",
+    "redact",
+    "privacy"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

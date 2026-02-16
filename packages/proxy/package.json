@@ -18,6 +18,19 @@
   "bin": {
     "context-proxy": "dist/server.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/larsderidder/contextio.git",
+    "directory": "packages/proxy"
+  },
+  "homepage": "https://github.com/larsderidder/contextio#readme",
+  "bugs": "https://github.com/larsderidder/contextio/issues",
+  "keywords": [
+    "llm",
+    "proxy",
+    "http",
+    "server"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
