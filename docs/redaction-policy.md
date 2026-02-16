@@ -157,3 +157,113 @@ Paths use dot notation with `[*]` for array wildcards:
   }
 }
 ```
+
+## JSON Schema
+
+A JSON Schema is available for validation and IDE autocomplete. Save this URL in your editor or policy file:
+
+```json
+{
+  "$schema": "https://contextio.dev/schemas/redaction-policy.json"
+}
+```
+
+Or download from: `https://github.com/your-org/contextio/raw/main/schemas/redaction-policy.schema.json`
+
+### VS Code integration
+
+Add this to your `.vscode/settings.json`:
+
+```json
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["*.contextio.json", "*-policy.json"],
+      "url": "./schemas/redaction-policy.schema.json"
+    }
+  ]
+}
+```
+
+## Verifying Your Policy
+
+### 1. Test with the proxy
+
+Start the proxy with your custom policy and send test traffic:
+
+```bash
+# Start proxy with your policy
+ctxio proxy --redact-policy ./my-policy.jsonc --verbose
+
+# In another terminal, send test data
+curl -X POST http://127.0.0.1:4040/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"messages":[{"role":"user","content":"Test: john@test.com, 123-45-6789"}]}'
+
+# Check the capture file
+ls -t ~/.contextio/captures/ | head -1 | xargs cat
+```
+
+### 2. Validate JSON syntax
+
+```bash
+# Check if your policy is valid JSON/JSONC
+node -e "
+const fs = require('fs');
+const policy = JSON.parse(fs.readFileSync('./my-policy.jsonc', 'utf8').replace(/\\/\\/.*$/gm, '').replace(/,\s*([\\]\\}])/g, '\$1'));
+console.log('Valid JSON:', JSON.stringify(policy, null, 2));
+"
+```
+
+### 3. Test rules in isolation
+
+You can test your regex patterns directly:
+
+```bash
+node -e "
+const pattern = /your-pattern-here/g;
+const testString = 'Test string with sensitive data';
+console.log('Matches:', testString.match(pattern));
+"
+```
+
+### 4. Quick dry-run
+
+To verify redaction without running the full proxy, use the redact package directly:
+
+```bash
+node -e "
+import { createRedactPlugin, createStats } from '@contextio/redact';
+import { compilePolicy, loadPolicyFile } from '@contextio/redact/dist/policy.js';
+
+const policy = loadPolicyFile('./my-policy.jsonc');
+const stats = createStats();
+
+const testInput = 'Contact john@company.com or EMP-12345';
+const result = redactWithPolicy(testInput, policy, stats);
+
+console.log('Input:', testInput);
+console.log('Output:', result);
+console.log('Stats:', stats);
+"
+```
+
+## Troubleshooting
+
+### Rule not matching?
+
+1. **Check regex escaping**: In JSON, `\` must be double-escaped: `\\d` not `\d`
+2. **Test the regex**: Use an online regex tester like regex101.com
+3. **Check context requirements**: If your rule has `context`, ensure the context word appears within `contextWindow` characters
+
+### False positives?
+
+1. Add context words to reduce matches
+2. Use the `allowlist` to exclude specific values
+3. Use `paths` to limit where redaction applies
+
+### Performance issues?
+
+- Complex regexes can be slow; simplify patterns where possible
+- Avoid overly broad patterns like `.*`
