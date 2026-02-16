@@ -168,7 +168,7 @@ A JSON Schema is available for validation and IDE autocomplete. Save this URL in
 }
 ```
 
-Or download from: `https://github.com/your-org/contextio/raw/main/schemas/redaction-policy.schema.json`
+Or download from: `https://github.com/larsderidder/contextio/raw/main/schemas/redaction-policy.schema.json`
 
 ### VS Code integration
 
