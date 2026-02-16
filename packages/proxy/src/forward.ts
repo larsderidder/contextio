@@ -29,6 +29,8 @@ import {
 } from "@contextio/core";
 import type {
   CaptureData,
+  HeaderMap,
+  JsonValue,
   ProxyPlugin,
   RequestContext,
   ResponseContext,
@@ -126,11 +128,11 @@ function runCapturePlugins(
  * compression between localhost and client is pointless anyway.
  */
 function buildForwardHeaders(
-  reqHeaders: Record<string, any>,
+  reqHeaders: HeaderMap,
   targetHost: string | null,
   bodyLength?: number,
-): Record<string, any> {
-  const forwardHeaders = { ...reqHeaders };
+): HeaderMap {
+  const forwardHeaders: HeaderMap = { ...reqHeaders };
   delete forwardHeaders["x-target-url"];
   delete forwardHeaders.host;
   delete forwardHeaders["accept-encoding"];
@@ -139,9 +141,46 @@ function buildForwardHeaders(
   }
   if (bodyLength != null) {
     delete forwardHeaders["transfer-encoding"];
-    forwardHeaders["content-length"] = bodyLength;
+    forwardHeaders["content-length"] = String(bodyLength);
   }
   return forwardHeaders;
+}
+
+function buildCaptureData(options: {
+  sessionId: string | null;
+  req: http.IncomingMessage;
+  cleanPath: string;
+  source: string | null;
+  provider: string;
+  apiFormat: string;
+  targetUrl: string;
+  ctx: RequestContext;
+  reqBytes: number;
+  proxyRes: http.IncomingMessage;
+  finalBody: string;
+  isStreaming: boolean;
+  respBytes: number;
+  timings: CaptureData["timings"];
+}): CaptureData {
+  return {
+    timestamp: new Date().toISOString(),
+    sessionId: options.sessionId,
+    method: options.req.method!,
+    path: options.cleanPath,
+    source: options.source,
+    provider: options.provider,
+    apiFormat: options.apiFormat,
+    targetUrl: options.targetUrl,
+    requestHeaders: selectHeaders(options.ctx.headers),
+    requestBody: options.ctx.body,
+    requestBytes: options.reqBytes,
+    responseStatus: options.proxyRes.statusCode || 0,
+    responseHeaders: selectHeaders(options.proxyRes.headers as HeaderMap),
+    responseBody: options.finalBody,
+    responseIsStreaming: options.isStreaming,
+    responseBytes: options.respBytes,
+    timings: options.timings,
+  };
 }
 
 /**
@@ -215,7 +254,7 @@ function forwardPassthrough(
 ): void {
   const targetParsed = url.parse(targetUrl);
   const forwardHeaders = buildForwardHeaders(
-    req.headers as Record<string, any>,
+    req.headers as HeaderMap,
     targetParsed.host,
     body ? body.length : undefined,
   );
@@ -338,9 +377,9 @@ export function createProxyHandler(
       const bodyText = decompressed.toString("utf8");
 
       // Try to parse as JSON, but forward regardless
-      let bodyJson: Record<string, any> | null = null;
+      let bodyJson: JsonValue | null = null;
       try {
-        bodyJson = JSON.parse(bodyText);
+        bodyJson = JSON.parse(bodyText) as JsonValue;
       } catch {
         // Not JSON; forward as raw bytes
       }
@@ -352,7 +391,7 @@ export function createProxyHandler(
         path: cleanPath,
         source,
         sessionId,
-        headers: { ...req.headers } as Record<string, any>,
+        headers: { ...req.headers } as HeaderMap,
         body: bodyJson,
         rawBody: bodyBuffer,
       };
@@ -473,7 +512,7 @@ export function createProxyHandler(
               // Run response plugins for non-streaming responses
               const finishResponse = (
                 finalBody: string,
-                finalHeaders: Record<string, any>,
+                finalHeaders: HeaderMap,
                 finalStatus: number,
               ): void => {
                 if (shouldBufferResponse && !res.headersSent) {
@@ -489,46 +528,43 @@ export function createProxyHandler(
 
                 // Build capture and run capture plugins
                 if (hasCapturePlugins) {
-                  const capture: CaptureData = {
-                    timestamp: new Date().toISOString(),
+                  const timings: CaptureData["timings"] = {
+                    send_ms: Math.round(
+                      Math.max(
+                        0,
+                        (requestSentTime || firstByteTime) -
+                          startTime,
+                      ),
+                    ),
+                    wait_ms: Math.round(
+                      Math.max(
+                        0,
+                        firstByteTime -
+                          (requestSentTime || startTime),
+                      ),
+                    ),
+                    receive_ms: Math.round(
+                      endTime - firstByteTime,
+                    ),
+                    total_ms: Math.round(endTime - startTime),
+                  };
+
+                  const capture = buildCaptureData({
                     sessionId,
-                    method: req.method!,
-                    path: cleanPath,
+                    req,
+                    cleanPath,
                     source,
                     provider,
                     apiFormat,
                     targetUrl,
-                    requestHeaders: selectHeaders(ctx.headers),
-                    requestBody: ctx.body,
-                    requestBytes: reqBytes,
-                    responseStatus: proxyRes.statusCode || 0,
-                    responseHeaders: selectHeaders(
-                      proxyRes.headers as Record<string, any>,
-                    ),
-                    responseBody: finalBody,
-                    responseIsStreaming: !!isStreaming,
-                    responseBytes: respBytes,
-                    timings: {
-                      send_ms: Math.round(
-                        Math.max(
-                          0,
-                          (requestSentTime || firstByteTime) -
-                            startTime,
-                        ),
-                      ),
-                      wait_ms: Math.round(
-                        Math.max(
-                          0,
-                          firstByteTime -
-                            (requestSentTime || startTime),
-                        ),
-                      ),
-                      receive_ms: Math.round(
-                        endTime - firstByteTime,
-                      ),
-                      total_ms: Math.round(endTime - startTime),
-                    },
-                  };
+                    ctx,
+                    reqBytes,
+                    proxyRes,
+                    finalBody,
+                    isStreaming: !!isStreaming,
+                    respBytes,
+                    timings,
+                  });
 
                   runCapturePlugins(plugins, capture);
                 }
@@ -538,7 +574,7 @@ export function createProxyHandler(
                 const respCtx: ResponseContext = {
                   status: proxyRes.statusCode || 0,
                   headers: {
-                    ...((proxyRes.headers as Record<string, any>) || {}),
+                    ...((proxyRes.headers as HeaderMap) || {}),
                   },
                   body: respBody,
                   isStreaming: false,
@@ -561,14 +597,14 @@ export function createProxyHandler(
                     );
                     finishResponse(
                       respBody,
-                      proxyRes.headers as Record<string, any>,
+                      proxyRes.headers as HeaderMap,
                       proxyRes.statusCode || 0,
                     );
                   });
               } else {
                 finishResponse(
                   respBody,
-                  proxyRes.headers as Record<string, any>,
+                  proxyRes.headers as HeaderMap,
                   proxyRes.statusCode || 0,
                 );
               }

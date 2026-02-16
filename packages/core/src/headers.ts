@@ -6,6 +6,8 @@
  * truth for which headers get stripped before writing to disk.
  */
 
+import type { HeaderMap } from "./types.js";
+
 /**
  * Header names (lowercase) that must never be written to capture files.
  * Checked case-insensitively by `selectHeaders()`.
@@ -32,7 +34,7 @@ export const SENSITIVE_HEADERS = new Set([
  * store everything as `Record<string, string>`.
  */
 export function selectHeaders(
-  headers: Record<string, any>,
+  headers: HeaderMap,
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, val] of Object.entries(headers)) {

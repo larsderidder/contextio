@@ -36,6 +36,12 @@ export type ApiFormat =
   | "raw"
   | "unknown";
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue };
+
+export type HeaderMap = Record<string, string | string[] | undefined>;
+
 // --- Upstream targets ---
 
 /**
@@ -80,7 +86,7 @@ export interface CaptureData {
   /** Request headers with sensitive values (auth, API keys) stripped. */
   requestHeaders: Record<string, string>;
   /** Parsed JSON request body, or null if non-JSON. */
-  requestBody: Record<string, any> | null;
+  requestBody: JsonValue | null;
   /** Size of the raw request body in bytes. */
   requestBytes: number;
   /** HTTP status code from the upstream. */
@@ -120,8 +126,8 @@ export interface RequestContext {
   path: string;
   source: string | null;
   sessionId: string | null;
-  headers: Record<string, any>;
-  body: Record<string, any> | null;
+  headers: HeaderMap;
+  body: JsonValue | null;
   rawBody: Buffer;
 }
 
@@ -133,7 +139,7 @@ export interface RequestContext {
  */
 export interface ResponseContext {
   status: number;
-  headers: Record<string, string>;
+  headers: HeaderMap;
   body: string;
   isStreaming: boolean;
   sessionId: string | null;
