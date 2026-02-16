@@ -15,7 +15,9 @@ describe("parseArgs", () => {
     assert.ok(!isError(r));
     assert.equal(r.command, "proxy");
     if (r.command === "proxy") {
+      assert.equal(r.action, "start");
       assert.equal(r.port, 0);
+      assert.equal(r.detach, false);
       assert.equal(r.redact, false);
       assert.equal(r.log, true);
       assert.equal(r.verbose, false);
@@ -129,27 +131,27 @@ describe("parseArgs", () => {
     assert.ok(isError(r));
   });
 
-  // --- background ---
+  // --- proxy -d / stop / status ---
 
-  it("background defaults to status", () => {
-    const r = parse("background");
+  it("proxy -d sets detach", () => {
+    const r = parse("proxy", "-d");
     assert.ok(!isError(r));
-    if (r.command === "background") assert.equal(r.action, "status");
+    if (r.command === "proxy") {
+      assert.equal(r.detach, true);
+      assert.equal(r.action, "start");
+    }
   });
 
-  it("background start/stop", () => {
-    const r1 = parse("background", "start");
-    assert.ok(!isError(r1));
-    if (r1.command === "background") assert.equal(r1.action, "start");
-
-    const r2 = parse("background", "stop");
-    assert.ok(!isError(r2));
-    if (r2.command === "background") assert.equal(r2.action, "stop");
+  it("proxy stop", () => {
+    const r = parse("proxy", "stop");
+    assert.ok(!isError(r));
+    if (r.command === "proxy") assert.equal(r.action, "stop");
   });
 
-  it("background invalid action is error", () => {
-    const r = parse("background", "restart");
-    assert.ok(isError(r));
+  it("proxy status", () => {
+    const r = parse("proxy", "status");
+    assert.ok(!isError(r));
+    if (r.command === "proxy") assert.equal(r.action, "status");
   });
 
   // --- monitor ---

@@ -842,14 +842,15 @@ async function main(): Promise<void> {
     case "doctor":
       process.exit(await runDoctor());
       break;
-    case "background":
-      process.exit(await runBackground(result.action));
-      break;
     case "attach":
       await runAttach(result);
       break;
     case "proxy":
-      if (result.wrap) {
+      if (result.action === "stop" || result.action === "status") {
+        process.exit(await runBackground(result.action));
+      } else if (result.detach) {
+        process.exit(await runBackground("start"));
+      } else if (result.wrap) {
         await runWrap(result, result.wrap);
       } else {
         await runStandalone(result);

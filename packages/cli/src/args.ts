@@ -8,8 +8,10 @@ import { Command } from "commander";
 
 export interface ProxyArgs {
   command: "proxy";
+  action: "start" | "stop" | "status";
   port: number;
   bind: string;
+  detach: boolean;
   redact: boolean;
   redactPreset: string;
   redactPolicy: string | null;
@@ -26,11 +28,6 @@ export interface AttachArgs {
   command: "attach";
   port: number;
   wrap: string[];
-}
-
-export interface BackgroundArgs {
-  command: "background";
-  action: "start" | "stop" | "status";
 }
 
 export interface MonitorArgs {
@@ -70,7 +67,6 @@ export interface DoctorArgs {
 export type ParsedArgs =
   | ProxyArgs
   | AttachArgs
-  | BackgroundArgs
   | MonitorArgs
   | InspectArgs
   | ReplayArgs
@@ -105,6 +101,7 @@ export function buildProgram(
     .usage("[options] [-- <command> [args...]]")
     .option("-p, --port <number>", "port to listen on (default: 4040)")
     .option("--bind <host>", "bind address (default: 127.0.0.1)")
+    .option("-d, --detach", "daemonize the proxy (run in background)")
     .option("-r, --redact", "enable PII/secret redaction (default preset: pii)")
     .option("-P, --redact-preset <name>", "preset: secrets, pii, strict")
     .option("-f, --redact-policy <path>", "path to a redaction policy JSON file")
@@ -119,6 +116,31 @@ export function buildProgram(
     .exitOverride();
 
   proxy.action((commandArgs, opts) => {
+    // "proxy stop" and "proxy status" are special actions
+    if (
+      commandArgs.length === 1 &&
+      (commandArgs[0] === "stop" || commandArgs[0] === "status")
+    ) {
+      onResult({
+        command: "proxy",
+        action: commandArgs[0],
+        port: opts.port ? parseInt(opts.port, 10) : 0,
+        bind: "",
+        detach: false,
+        redact: false,
+        redactPreset: "pii",
+        redactPolicy: null,
+        redactReversible: false,
+        log: true,
+        noLog: false,
+        logDir: null,
+        logMaxSessions: 0,
+        verbose: false,
+        wrap: null,
+      });
+      return;
+    }
+
     const wrap = commandArgs.length > 0 ? commandArgs : null;
 
     const redact =
@@ -133,8 +155,10 @@ export function buildProgram(
 
     onResult({
       command: "proxy",
+      action: "start",
       port: opts.port ? parseInt(opts.port, 10) : 0,
       bind: opts.bind || "",
+      detach: opts.detach || false,
       redact,
       redactPreset: opts.redactPreset || "pii",
       redactPolicy: opts.redactPolicy || null,
@@ -163,21 +187,6 @@ export function buildProgram(
         port: opts.port ? parseInt(opts.port, 10) : 4040,
         wrap: commandArgs,
       });
-    });
-
-  // --- background ---
-  program
-    .command("background")
-    .description("Manage a detached shared proxy process")
-    .usage("<start|stop|status>")
-    .argument("[action]", "start, stop, or status", "status")
-    .exitOverride()
-    .action((action) => {
-      if (!["start", "stop", "status"].includes(action)) {
-        onResult({ error: `background requires one of: start, stop, status` });
-        return;
-      }
-      onResult({ command: "background", action });
     });
 
   // --- monitor ---
