@@ -21,7 +21,7 @@ import { createProxy } from "@contextio/proxy";
 import { createRedactPlugin } from "@contextio/redact";
 import type { PresetName } from "@contextio/redact";
 
-import { getHelp, isError, parseArgs } from "./args.js";
+import { isError, parseArgs } from "./args.js";
 import type { AttachArgs, ProxyArgs } from "./args.js";
 import { getToolEnv } from "./tools.js";
 import { runMonitor } from "./monitor.js";
@@ -839,12 +839,6 @@ async function main(): Promise<void> {
   }
 
   switch (result.command) {
-    case "help":
-      console.log(getHelp(result.topic));
-      break;
-    case "version":
-      console.log(`ctxio ${VERSION}`);
-      break;
     case "doctor":
       process.exit(await runDoctor());
       break;
