@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * @contextio/proxy standalone entry point.
+ * Standalone entry point for `@contextio/proxy`.
  *
- * Starts the proxy with plugins loaded from CONTEXT_PROXY_PLUGINS env var.
+ * Starts the proxy server and dynamically loads plugins from the
+ * `CONTEXT_PROXY_PLUGINS` environment variable (comma-separated module
+ * specifiers). Each module must export a ProxyPlugin or a factory
+ * function that returns one.
  *
- * ZERO DEPENDENCIES CONSTRAINT
- * ============================
- * This file and everything it imports must use only Node.js built-in modules
- * (plus @contextio/core which is itself zero-dep). Users route their API keys
- * through this proxy; keeping it small and dependency-free means the entire
- * proxy can be audited by reading two small packages.
+ * This file is the `context-proxy` binary defined in package.json.
+ *
+ * ZERO DEPENDENCY CONSTRAINT: this file and everything it imports must
+ * use only Node.js built-ins and @contextio/core. API keys flow through
+ * this code; keeping it small means the entire proxy is auditable by
+ * reading two packages.
  */
 
 import type { ProxyPlugin } from "@contextio/core";
@@ -18,10 +21,12 @@ import type { ProxyPlugin } from "@contextio/core";
 import { createProxy } from "./proxy.js";
 
 /**
- * Load plugins from CONTEXT_PROXY_PLUGINS env var.
+ * Dynamically load plugins from the CONTEXT_PROXY_PLUGINS env var.
  *
- * Format: comma-separated module specifiers. Each module must export
- * a default function that returns a ProxyPlugin (or a ProxyPlugin directly).
+ * Accepts comma-separated module specifiers (npm packages or file paths).
+ * Each module can export either:
+ * - A factory function (called with no args, must return a ProxyPlugin)
+ * - A ProxyPlugin object directly
  */
 async function loadPluginsFromEnv(): Promise<ProxyPlugin[]> {
   const pluginsEnv = process.env.CONTEXT_PROXY_PLUGINS;

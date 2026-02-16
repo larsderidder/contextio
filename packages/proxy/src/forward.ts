@@ -1,9 +1,19 @@
 /**
- * HTTP forwarding logic for the proxy.
+ * HTTP forwarding logic: the core of the proxy.
  *
- * Receives incoming requests, runs them through the plugin pipeline,
- * forwards to the appropriate LLM upstream, and pipes the response
- * back to the client. Zero external dependencies beyond @contextio/core.
+ * Request lifecycle:
+ * 1. Buffer incoming request body, decompress if needed
+ * 2. Parse JSON, build RequestContext
+ * 3. Run onRequest plugin pipeline (redaction happens here)
+ * 4. Forward to upstream LLM API
+ * 5. For streaming: pipe SSE chunks through onStreamChunk plugins to client
+ *    For non-streaming: buffer response, run onResponse plugins, send to client
+ * 6. Build CaptureData, fire onCapture plugins (logging happens here)
+ *
+ * Non-POST requests (GET /v1/models, OPTIONS) are passed through without
+ * plugin processing or capture.
+ *
+ * Zero external dependencies beyond @contextio/core.
  */
 
 import http from "node:http";
@@ -35,9 +45,9 @@ export interface ForwardOptions {
 // --- Plugin pipeline helpers ---
 
 /**
- * Run all onRequest hooks in sequence. Each receives the output of the
- * previous one. If a hook throws, the error is logged and the pipeline
- * continues with the last good context.
+ * Run onRequest hooks as a pipeline: each plugin receives the output of
+ * the previous one. If a plugin throws, the error is logged and the
+ * pipeline continues with the last successful context (fail-open).
  */
 async function runRequestPlugins(
   plugins: ProxyPlugin[],
@@ -58,9 +68,7 @@ async function runRequestPlugins(
   return current;
 }
 
-/**
- * Run all onResponse hooks in sequence.
- */
+/** Run onResponse hooks as a pipeline (same fail-open semantics as onRequest). */
 async function runResponsePlugins(
   plugins: ProxyPlugin[],
   ctx: ResponseContext,
@@ -80,9 +88,7 @@ async function runResponsePlugins(
   return current;
 }
 
-/**
- * Run all onCapture hooks. Fire-and-forget; errors are logged.
- */
+/** Fire all onCapture hooks. Errors are logged but never block the response. */
 function runCapturePlugins(
   plugins: ProxyPlugin[],
   capture: CaptureData,
@@ -112,7 +118,12 @@ function runCapturePlugins(
 // --- Header / lifecycle helpers ---
 
 /**
- * Build headers to send to the upstream, stripping proxy-internal ones.
+ * Build headers for the upstream request.
+ *
+ * Strips proxy-internal headers (x-target-url, host) and removes
+ * accept-encoding so upstreams return uncompressed responses. The proxy
+ * needs to read and potentially modify response bodies as text;
+ * compression between localhost and client is pointless anyway.
  */
 function buildForwardHeaders(
   reqHeaders: Record<string, any>,
@@ -122,9 +133,6 @@ function buildForwardHeaders(
   const forwardHeaders = { ...reqHeaders };
   delete forwardHeaders["x-target-url"];
   delete forwardHeaders.host;
-  // Remove accept-encoding so upstreams send uncompressed responses.
-  // The proxy needs to read/modify response bodies as text. Compression
-  // between localhost proxy and client is pointless anyway.
   delete forwardHeaders["accept-encoding"];
   if (targetHost) {
     forwardHeaders.host = targetHost;
@@ -137,7 +145,10 @@ function buildForwardHeaders(
 }
 
 /**
- * Wire up error/close handlers between client response and upstream request.
+ * Wire up error and close handlers between client and upstream.
+ *
+ * If the client disconnects, destroy the upstream request. If the
+ * upstream errors, send a 502 to the client.
  */
 function attachLifecycleHandlers(
   res: http.ServerResponse,
@@ -161,7 +172,11 @@ function attachLifecycleHandlers(
 }
 
 /**
- * Resolve headers for routing, filtering x-target-url when not allowed.
+ * Prepare headers for route resolution.
+ *
+ * The `x-target-url` header lets mitmproxy specify the original
+ * destination, but is only trusted from local connections when
+ * `allowTargetOverride` is enabled.
  */
 function headersForResolution(
   headers: http.IncomingHttpHeaders,
@@ -189,8 +204,8 @@ function isLocalRemote(addr: string | undefined): boolean {
 // --- Passthrough for non-POST ---
 
 /**
- * Forward a non-POST request (GET /v1/models, OPTIONS, etc.) without
- * running plugins or capturing.
+ * Forward a non-POST request (GET /v1/models, OPTIONS, etc.) directly
+ * to the upstream. No plugin processing, no capture.
  */
 function forwardPassthrough(
   req: http.IncomingMessage,
@@ -233,7 +248,11 @@ function forwardPassthrough(
 // --- Main handler ---
 
 /**
- * Create the main proxy request handler.
+ * Create the main `(req, res)` handler for the proxy HTTP server.
+ *
+ * Pre-computes which plugin hook types are present to skip unnecessary
+ * work on the hot path. The returned function is compatible with
+ * `http.createServer()`.
  */
 export function createProxyHandler(
   opts: ForwardOptions,
@@ -297,9 +316,9 @@ export function createProxyHandler(
         req.headers["content-encoding"] || ""
       ).toLowerCase();
 
-      // Decompress if needed so plugins can inspect/modify the body.
-      // The original (compressed) buffer is kept for forwarding when
-      // no plugin modifies the body.
+      // Decompress the body so plugins can inspect/modify it as text.
+      // The original compressed buffer is kept; if no plugin modifies
+      // the body, we forward the original bytes to avoid re-compression.
       let decompressed: Buffer;
       try {
         if (contentEncoding === "zstd") {
@@ -340,24 +359,19 @@ export function createProxyHandler(
 
       // Run the async plugin pipeline, then forward
       const doForward = (ctx: RequestContext): void => {
-        // Serialize the (possibly modified) body back to a buffer.
-        // When a plugin modifies the body, we send uncompressed JSON
-        // and strip the content-encoding header so the upstream sees
-        // plain JSON. When nothing changed, forward original bytes
-        // (possibly compressed) as-is.
+        // If a plugin modified the body, re-serialize as plain JSON.
+        // Otherwise forward original bytes (possibly still compressed).
         let forwardBuffer: Buffer;
         let bodyWasModified = false;
         if (ctx.body && ctx.body !== bodyJson) {
-          // Body was modified by a plugin; re-serialize as plain JSON
           forwardBuffer = Buffer.from(JSON.stringify(ctx.body), "utf8");
           bodyWasModified = true;
         } else {
-          // No modification or non-JSON; use original bytes
           forwardBuffer = bodyBuffer;
         }
 
-        // If plugins modified the body, remove content-encoding since
-        // the re-serialized body is uncompressed plain JSON.
+        // Strip content-encoding when we re-serialized; the new body
+        // is plain JSON, not compressed.
         if (bodyWasModified && contentEncoding) {
           delete ctx.headers["content-encoding"];
         }

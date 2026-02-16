@@ -1,8 +1,9 @@
 /**
- * Proxy configuration.
+ * Proxy configuration resolution.
  *
- * Reads from environment variables with safe defaults.
- * Zero external dependencies beyond @contextio/core.
+ * Merges programmatic overrides with environment variables and applies
+ * safe defaults. All upstream URLs, bind address, port, and feature
+ * flags are resolved here before the proxy starts.
  */
 
 import type { ProxyConfig, Upstreams } from "@contextio/core";
@@ -18,8 +19,15 @@ export interface ResolvedProxyConfig {
 }
 
 /**
- * Load proxy config from environment variables, merging with any
- * overrides from the provided partial config.
+ * Resolve final proxy config from environment variables and overrides.
+ *
+ * Priority: programmatic overrides > environment variables > defaults.
+ *
+ * Environment variables:
+ * - `UPSTREAM_OPENAI_URL`, `UPSTREAM_ANTHROPIC_URL`, etc. for upstream URLs
+ * - `CONTEXT_PROXY_BIND_HOST` for bind address (default: "127.0.0.1")
+ * - `CONTEXT_PROXY_PORT` for port (default: 4040)
+ * - `CONTEXT_PROXY_ALLOW_TARGET_OVERRIDE=1` to allow x-target-url header
  */
 export function resolveConfig(
   overrides?: ProxyConfig,
