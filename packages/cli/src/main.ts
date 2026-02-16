@@ -36,6 +36,7 @@ import { runMonitor } from "./monitor.js";
 import { runInspect } from "./inspect.js";
 import { runReplay } from "./replay.js";
 import { runExport } from "./export.js";
+import { dispatchCommand } from "./dispatch.js";
 
 const VERSION = "0.1.0";
 const CLI_ENTRY = fileURLToPath(import.meta.url);
@@ -881,36 +882,22 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  switch (result.command) {
-    case "doctor":
-      process.exit(await runDoctor());
-      break;
-    case "attach":
-      await runAttach(result);
-      break;
-    case "proxy":
-      if (result.action === "stop" || result.action === "status") {
-        process.exit(await runBackground(result.action));
-      } else if (result.detach) {
-        process.exit(await runBackground("start"));
-      } else if (result.wrap) {
-        await runWrap(result, result.wrap);
-      } else {
-        await runStandalone(result);
-      }
-      break;
-    case "monitor":
-      await runMonitor(result);
-      break;
-    case "inspect":
-      await runInspect(result);
-      break;
-    case "replay":
-      await runReplay(result);
-      break;
-    case "export":
-      process.exit(await runExport(result));
-      break;
+  const exitCode = await dispatchCommand(result, {
+    runDoctor,
+    runAttach,
+    runProxy: {
+      runBackground,
+      runStandalone,
+      runWrap,
+    },
+    runMonitor,
+    runInspect,
+    runReplay,
+    runExport,
+  });
+
+  if (typeof exitCode === "number") {
+    process.exit(exitCode);
   }
 }
 
