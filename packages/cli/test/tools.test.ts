@@ -24,10 +24,10 @@ describe("getToolEnv", () => {
     assert.equal(env.CODE_ASSIST_ENDPOINT, "http://127.0.0.1:4040/gemini");
   });
 
-  it("codex returns empty env (unsupported)", () => {
+  it("codex uses mitmproxy upstream mode", () => {
     const { env, needsMitm } = getToolEnv("codex", proxy);
     assert.deepEqual(env, {});
-    assert.ok(!needsMitm);
+    assert.equal(needsMitm, true);
   });
 
   it("copilot uses mitmproxy upstream mode", () => {

@@ -56,15 +56,13 @@ export function getToolEnv(
       };
 
     case "codex":
-      // Codex has its own built-in network proxy and sandboxed networking.
-      // It ignores OPENAI_BASE_URL. Cannot be routed through contextio.
-      console.error(
-        "Warning: Codex has its own network proxy and cannot be routed through contextio.",
-      );
-      console.error(
-        "Redaction and logging will not apply to Codex traffic.",
-      );
-      return { env: {} };
+      // Codex ignores OPENAI_BASE_URL but respects HTTPS_PROXY.
+      // Route through mitmproxy in upstream mode, chained into the
+      // contextio proxy for full redaction and logging support.
+      return {
+        env: {},
+        needsMitm: true,
+      };
 
     case "copilot":
       // Copilot CLI ignores OPENAI_BASE_URL but respects HTTPS_PROXY.

@@ -147,15 +147,13 @@ Each capture file is a complete request/response pair:
 | Aider | proxy | yes | yes (untested) |
 | OpenCode | mitmproxy + proxy | yes | yes |
 | Copilot CLI | mitmproxy + proxy | yes | yes |
-| Codex | not supported | | |
+| Codex | mitmproxy + proxy | yes | yes |
 
 **Proxy mode** rewrites the tool's base URL so all traffic flows through contextio. Full redaction and logging.
 
 **Mitmproxy + proxy mode** is for tools that ignore base URL overrides but respect `HTTPS_PROXY`. contextio starts mitmproxy in upstream mode to terminate TLS, then chains all traffic through the contextio proxy. Full redaction and logging, same as proxy mode.
 
-**Codex** has its own sandboxed network proxy baked into a statically linked Rust binary. It ignores every env var we could set. Nothing to be done.
-
-OpenCode and Copilot require mitmproxy to be installed:
+Codex, OpenCode, and Copilot require mitmproxy to be installed:
 
 ```bash
 pipx install mitmproxy

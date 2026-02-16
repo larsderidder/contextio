@@ -234,20 +234,20 @@ async function runDoctor(): Promise<number> {
   console.log(`ctxio doctor v${VERSION}`);
 
   // mitmproxy is needed for tools that ignore base URL overrides
-  // (Copilot, OpenCode). It runs in upstream mode, chaining into the
-  // contextio proxy for full redaction and logging.
+  // (Codex, Copilot, OpenCode). The addon rewrites requests to route
+  // through the contextio proxy for full redaction and logging.
   const mitmdumpPath = findBinaryOnPath("mitmdump");
   console.log(
-    `- mitmdump (Copilot/OpenCode): ${mitmdumpPath ?? "not found (install: pipx install mitmproxy)"}`,
+    `- mitmdump (Codex/Copilot/OpenCode): ${mitmdumpPath ?? "not found (install: pipx install mitmproxy)"}`,
   );
 
   const certPath = join(homedir(), ".mitmproxy", "mitmproxy-ca-cert.pem");
   console.log(
-    `- mitm cert (Copilot/OpenCode): ${fs.existsSync(certPath) ? certPath : "not present (run 'mitmdump' once to generate)"}`,
+    `- mitm cert (Codex/Copilot/OpenCode): ${fs.existsSync(certPath) ? certPath : "not present (run 'mitmdump' once to generate)"}`,
   );
 
   console.log(
-    `- mitm addon (Copilot/OpenCode): ${fs.existsSync(MITM_ADDON_PATH) ? MITM_ADDON_PATH : "not found"}`,
+    `- mitm addon (Codex/Copilot/OpenCode): ${fs.existsSync(MITM_ADDON_PATH) ? MITM_ADDON_PATH : "not found"}`,
   );
 
   const captureDir = join(homedir(), ".contextio", "captures");
@@ -558,10 +558,11 @@ async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
     ...toolEnv.env,
   };
 
-  if (toolEnv.needsMitm && childEnv.SSL_CERT_FILE === "") {
+  if (toolEnv.needsMitm) {
     const certPath = join(homedir(), ".mitmproxy", "mitmproxy-ca-cert.pem");
     if (fs.existsSync(certPath)) {
       childEnv.SSL_CERT_FILE = certPath;
+      childEnv.NODE_EXTRA_CA_CERTS = certPath;
     } else {
       console.error(
         `Warning: mitmproxy CA cert not found at ${certPath}. Run 'mitmdump' once to generate it.`,
