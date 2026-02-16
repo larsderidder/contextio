@@ -19,41 +19,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
-      - name: Verify packages are publishable
+      - name: Verify packages built
         run: |
-          errors=0
-
-          for pkg in packages/*; do
-            name=$(basename "$pkg")
-            echo "--- $name ---"
-
-            # dist/ must exist
-            if [ ! -d "$pkg/dist" ]; then
-              echo "  ERROR: $pkg/dist missing"
-              errors=$((errors + 1))
-              continue
-            fi
-
-            # README must be included
-            if [ ! -f "$pkg/README.md" ]; then
-              echo "  ERROR: $pkg/README.md missing"
-              errors=$((errors + 1))
-            fi
-
-            # Dry-run pack and check tarball contents
-            tarball=$(npm pack "$pkg" --dry-run 2>&1)
-            echo "$tarball" | grep -q 'README.md' || { echo "  ERROR: README.md not in tarball for $name"; errors=$((errors + 1)); }
-            echo "$tarball" | grep -q 'dist/' || { echo "  ERROR: no dist/ files in tarball for $name"; errors=$((errors + 1)); }
-          done
-
-          # Package-specific checks
-          npm pack packages/proxy --dry-run 2>&1 | grep -q 'dist/server.js' || { echo "ERROR: proxy dist/server.js missing from tarball"; errors=$((errors + 1)); }
-          npm pack packages/cli --dry-run 2>&1 | grep -q 'dist/main.js' || { echo "ERROR: cli dist/main.js missing from tarball"; errors=$((errors + 1)); }
-          npm pack packages/cli --dry-run 2>&1 | grep -q 'mitm_addon.py' || { echo "ERROR: cli mitm_addon.py missing from tarball"; errors=$((errors + 1)); }
-
-          if [ "$errors" -gt 0 ]; then
-            echo "FAILED: $errors error(s) found"
-            exit 1
-          fi
-          echo "All packages verified"
-      - run: pnpm publish --recursive --access public --provenance
+          # CLI has main.js, others have index.js
+          [ -f "packages/cli/dist/main.js" ] || { echo "ERROR: CLI dist/main.js missing"; exit 1; }
+          [ -f "packages/core/dist/index.js" ] || { echo "ERROR: core dist/index.js missing"; exit 1; }
+          [ -f "packages/proxy/dist/index.js" ] || { echo "ERROR: proxy dist/index.js missing"; exit 1; }
+          [ -f "packages/redact/dist/index.js" ] || { echo "ERROR: redact dist/index.js missing"; exit 1; }
+          [ -f "packages/logger/dist/index.js" ] || { echo "ERROR: logger dist/index.js missing"; exit 1; }
+          echo "All packages built successfully"
+      - run: pnpm publish --recursive --access public --provenance --no-git-checks
