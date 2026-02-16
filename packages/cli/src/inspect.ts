@@ -95,6 +95,21 @@ function extractAnthropicSystemPrompt(body: Record<string, any>): { system: stri
   return { system, tools };
 }
 
+function extractTextContent(content: unknown): string | null {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+
+  const parts: string[] = [];
+  for (const part of content) {
+    if (part && typeof part === "object" && (part as { type?: unknown }).type === "text") {
+      const text = (part as { text?: unknown }).text;
+      parts.push(typeof text === "string" ? text : "");
+    }
+  }
+
+  return parts.join("\n");
+}
+
 /** Extract system prompt and tool definitions from an OpenAI Chat Completions request. */
 function extractOpenAISystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
@@ -103,16 +118,9 @@ function extractOpenAISystemPrompt(body: Record<string, any>): { system: string 
   const messages = body.messages || [];
   for (const msg of messages) {
     if (msg.role === "system" || msg.role === "developer") {
-      if (typeof msg.content === "string") {
-        system = msg.content;
-      } else if (Array.isArray(msg.content)) {
-        const parts: string[] = [];
-        for (const part of msg.content) {
-          if (part.type === "text") {
-            parts.push(part.text || "");
-          }
-        }
-        system = parts.join("\n");
+      const contentText = extractTextContent(msg.content);
+      if (contentText !== null) {
+        system = contentText;
       }
       break;
     }
@@ -197,16 +205,9 @@ function getFirstUserMessage(capture: CaptureData): string | null {
 
   for (const msg of messages) {
     if (msg.role === "user") {
-      if (typeof msg.content === "string") {
-        return msg.content;
-      } else if (Array.isArray(msg.content)) {
-        const parts: string[] = [];
-        for (const part of msg.content) {
-          if (part.type === "text") {
-            parts.push(part.text || "");
-          }
-        }
-        return parts.join("\n");
+      const contentText = extractTextContent(msg.content);
+      if (contentText !== null) {
+        return contentText;
       }
     }
   }
