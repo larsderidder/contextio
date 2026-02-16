@@ -40,6 +40,14 @@ function makeRequest(
   });
 }
 
+function getServerPort(server: http.Server): number {
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Server is not listening on a TCP port.");
+  }
+  return address.port;
+}
+
 describe("proxy instance", () => {
   it("creates proxy with default config", () => {
     const proxy = createProxy({
@@ -127,7 +135,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -172,7 +180,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -220,7 +228,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -269,7 +277,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -313,7 +321,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -369,7 +377,7 @@ describe("proxy plugins", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -413,7 +421,7 @@ describe("proxy error handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -451,7 +459,7 @@ describe("proxy error handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -488,7 +496,7 @@ describe("proxy error handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -523,7 +531,7 @@ describe("proxy error handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -593,7 +601,7 @@ describe("proxy routing", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -631,7 +639,7 @@ describe("proxy routing", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -668,7 +676,7 @@ describe("proxy routing", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -732,7 +740,7 @@ describe("streaming responses", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -801,7 +809,7 @@ describe("streaming responses", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -873,7 +881,7 @@ describe("streaming responses", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -932,7 +940,7 @@ describe("proxy error handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -973,7 +981,7 @@ describe("header handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -1014,7 +1022,7 @@ describe("header handling", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -1066,7 +1074,7 @@ describe("plugin error resilience", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
@@ -1135,7 +1143,7 @@ describe("plugin error resilience", () => {
     });
 
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
-    const port = (upstream.address() as any).port;
+    const port = getServerPort(upstream);
 
     const proxy = createProxy({
       port: 0,
