@@ -63,8 +63,12 @@ export async function runExport(args: ExportArgs): Promise<number> {
 
   const source = captures[0]?.source || "unknown";
   const models = [...new Set(captures.map((c) => {
-    const model = c.requestBody?.model;
-    return typeof model === "string" ? model : "unknown";
+    const body = c.requestBody;
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+      const model = body.model;
+      return typeof model === "string" ? model : "unknown";
+    }
+    return "unknown";
   }))];
   const totalMs = captures.reduce((sum, c) => sum + (c.timings?.total_ms || 0), 0);
 

@@ -185,7 +185,7 @@ export async function runReplay(args: ReplayArgs): Promise<void> {
 
   // Build request body
   let requestBody = capture.requestBody;
-  if (!requestBody || typeof requestBody !== "object") {
+  if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
     console.error("Capture has no valid request body");
     process.exit(1);
   }

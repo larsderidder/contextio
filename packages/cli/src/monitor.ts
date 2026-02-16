@@ -30,7 +30,7 @@ interface CaptureDisplay {
 /** Extract the model name from a capture's request body. */
 function parseModelName(capture: CaptureData): string {
   const body = capture.requestBody;
-  if (!body || typeof body !== "object") return "?";
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "?";
 
   const model = body.model;
   if (typeof model === "string") return model;

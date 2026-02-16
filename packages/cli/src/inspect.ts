@@ -198,12 +198,13 @@ function extractSystemPrompt(capture: CaptureData): { system: string | null; too
 /** Extract the first user message from the conversation in a capture. */
 function getFirstUserMessage(capture: CaptureData): string | null {
   const body = capture.requestBody;
-  if (!body || typeof body !== "object") return null;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
 
   const messages = body.messages;
   if (!Array.isArray(messages)) return null;
 
   for (const msg of messages) {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
     if (msg.role === "user") {
       const contentText = extractTextContent(msg.content);
       if (contentText !== null) {

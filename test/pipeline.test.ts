@@ -183,7 +183,7 @@ describe("proxy + redact + logger pipeline", () => {
     assert.equal(resBody.content[0].text, "Hello from mock");
 
     // The upstream should have received the redacted body
-    const upstreamBody = JSON.parse(lastUpstreamBody);
+    const upstreamBody = JSON.parse(lastUpstreamBody) as { model: string; messages: Array<{ content: string }> };
     assert.equal(upstreamBody.model, "claude-sonnet-4-20250514");
     assert.ok(
       upstreamBody.messages[0].content.includes("[EMAIL_REDACTED]"),
@@ -209,12 +209,13 @@ describe("proxy + redact + logger pipeline", () => {
     // The capture should have the redacted body (redact ran before logger)
     assert.equal(capture.provider, "anthropic");
     assert.ok(capture.requestBody);
+    const reqBody = capture.requestBody as { messages: Array<{ content: string }> };
     assert.ok(
-      capture.requestBody!.messages[0].content.includes("[EMAIL_REDACTED]"),
+      reqBody.messages[0].content.includes("[EMAIL_REDACTED]"),
       "Capture should contain redacted email",
     );
     assert.ok(
-      capture.requestBody!.messages[0].content.includes("[SSN_REDACTED]"),
+      reqBody.messages[0].content.includes("[SSN_REDACTED]"),
       "Capture should contain redacted SSN",
     );
 
@@ -261,7 +262,7 @@ describe("proxy + redact + logger pipeline", () => {
     assert.equal(res.status, 200);
 
     // Upstream received the body unchanged
-    const upstreamBody = JSON.parse(lastUpstreamBody);
+    const upstreamBody = JSON.parse(lastUpstreamBody) as { messages: Array<{ content: string }> };
     assert.equal(upstreamBody.messages[0].content, "What is 2 + 2?");
 
     // Capture still written
@@ -269,8 +270,9 @@ describe("proxy + redact + logger pipeline", () => {
     const capture: CaptureData = JSON.parse(
       fs.readFileSync(capturePath, "utf8"),
     );
+    const captureReqBody = capture.requestBody as { messages: Array<{ content: string }> };
     assert.equal(
-      capture.requestBody!.messages[0].content,
+      captureReqBody.messages[0].content,
       "What is 2 + 2?",
     );
   });
@@ -343,7 +345,7 @@ describe("proxy + redact + logger pipeline", () => {
     assert.equal(res.status, 200);
 
     // Upstream should have received decompressed, redacted body
-    const upstreamBody = JSON.parse(lastUpstreamBody);
+    const upstreamBody = JSON.parse(lastUpstreamBody) as { messages: Array<{ content: string }> };
     assert.ok(
       upstreamBody.messages[0].content.includes("[EMAIL_REDACTED]"),
       `Expected email redaction, got: ${upstreamBody.messages[0].content}`,
@@ -524,7 +526,7 @@ describe("streaming reversible redaction", () => {
     assert.equal(res.status, 200);
 
     // 1. Verify the upstream received redacted values (numbered placeholders)
-    const upBody = JSON.parse(lastUpstreamBody);
+    const upBody = JSON.parse(lastUpstreamBody) as { messages: Array<{ content: string }> };
     const upContent = upBody.messages[0].content;
     assert.ok(upContent.includes("[EMAIL_1]"), `request should have [EMAIL_1], got: ${upContent}`);
     assert.ok(upContent.includes("[PHONE_US_1]"), `request should have [PHONE_US_1], got: ${upContent}`);

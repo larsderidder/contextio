@@ -267,7 +267,7 @@ describe("mitmproxy addon flow", { skip: SKIP ? "mitmdump or CA cert not availab
     assert.equal(res.status, 200);
 
     // The upstream should have received redacted content
-    const upstreamBody = JSON.parse(lastUpstreamBody);
+    const upstreamBody = JSON.parse(lastUpstreamBody) as { messages: Array<{ content: string }> };
     assert.ok(
       upstreamBody.messages[0].content.includes("[EMAIL_REDACTED]"),
       `Expected email redaction, got: ${upstreamBody.messages[0].content}`,
@@ -292,8 +292,9 @@ describe("mitmproxy addon flow", { skip: SKIP ? "mitmdump or CA cert not availab
     assert.equal(capture.source, "testclient");
     assert.equal(capture.sessionId, "aabb0011");
     assert.equal(capture.provider, "anthropic");
+    const reqBody = capture.requestBody as { messages: Array<{ content: string }> };
     assert.ok(
-      capture.requestBody!.messages[0].content.includes("[EMAIL_REDACTED]"),
+      reqBody.messages[0].content.includes("[EMAIL_REDACTED]"),
       "Capture should contain redacted email",
     );
   });
