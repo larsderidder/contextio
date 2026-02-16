@@ -17,6 +17,7 @@ import fs from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import zlib from "node:zlib";
 
 import { createProxy } from "@contextio/proxy";
 import type { CaptureData, ProxyPlugin } from "@contextio/core";
@@ -31,7 +32,7 @@ function makeRequest(
     method?: string;
     path: string;
     headers?: Record<string, string>;
-    body?: string;
+    body?: string | Buffer;
   },
 ): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
   return new Promise((resolve, reject) => {
@@ -314,6 +315,43 @@ describe("proxy + redact + logger pipeline", () => {
     } finally {
       await tempProxy.stop();
     }
+  });
+
+  it("decompresses zstd-encoded request bodies for redaction", async () => {
+    // Clean capture dir
+    for (const f of fs.readdirSync(captureDir)) {
+      fs.unlinkSync(join(captureDir, f));
+    }
+
+    const body = JSON.stringify({
+      model: "gpt-5.3-codex",
+      messages: [
+        { role: "user", content: "My email is codex-user@example.com" },
+      ],
+    });
+    const compressed = zlib.zstdCompressSync(Buffer.from(body, "utf8"));
+
+    const res = await makeRequest(proxyInstance.port, {
+      path: "/v1/chat/completions",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Encoding": "zstd",
+      },
+      body: compressed,
+    });
+
+    assert.equal(res.status, 200);
+
+    // Upstream should have received decompressed, redacted body
+    const upstreamBody = JSON.parse(lastUpstreamBody);
+    assert.ok(
+      upstreamBody.messages[0].content.includes("[EMAIL_REDACTED]"),
+      `Expected email redaction, got: ${upstreamBody.messages[0].content}`,
+    );
+    assert.ok(
+      !upstreamBody.messages[0].content.includes("codex-user@example.com"),
+      "Original email should not appear",
+    );
   });
 });
 

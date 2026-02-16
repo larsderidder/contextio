@@ -9,6 +9,7 @@
 import http from "node:http";
 import https from "node:https";
 import url from "node:url";
+import zlib from "node:zlib";
 
 import {
   classifyRequest,
@@ -292,7 +293,30 @@ export function createProxyHandler(
       if (clientAborted) return;
 
       const bodyBuffer = Buffer.concat(chunks);
-      const bodyText = bodyBuffer.toString("utf8");
+      const contentEncoding = (
+        req.headers["content-encoding"] || ""
+      ).toLowerCase();
+
+      // Decompress if needed so plugins can inspect/modify the body.
+      // The original (compressed) buffer is kept for forwarding when
+      // no plugin modifies the body.
+      let decompressed: Buffer;
+      try {
+        if (contentEncoding === "zstd") {
+          decompressed = zlib.zstdDecompressSync(bodyBuffer);
+        } else if (contentEncoding === "br") {
+          decompressed = zlib.brotliDecompressSync(bodyBuffer);
+        } else if (contentEncoding === "gzip" || contentEncoding === "deflate") {
+          decompressed = zlib.unzipSync(bodyBuffer);
+        } else {
+          decompressed = bodyBuffer;
+        }
+      } catch {
+        // Decompression failed; use raw bytes
+        decompressed = bodyBuffer;
+      }
+
+      const bodyText = decompressed.toString("utf8");
 
       // Try to parse as JSON, but forward regardless
       let bodyJson: Record<string, any> | null = null;
@@ -316,14 +340,26 @@ export function createProxyHandler(
 
       // Run the async plugin pipeline, then forward
       const doForward = (ctx: RequestContext): void => {
-        // Serialize the (possibly modified) body back to a buffer
+        // Serialize the (possibly modified) body back to a buffer.
+        // When a plugin modifies the body, we send uncompressed JSON
+        // and strip the content-encoding header so the upstream sees
+        // plain JSON. When nothing changed, forward original bytes
+        // (possibly compressed) as-is.
         let forwardBuffer: Buffer;
+        let bodyWasModified = false;
         if (ctx.body && ctx.body !== bodyJson) {
-          // Body was modified by a plugin; re-serialize
+          // Body was modified by a plugin; re-serialize as plain JSON
           forwardBuffer = Buffer.from(JSON.stringify(ctx.body), "utf8");
+          bodyWasModified = true;
         } else {
           // No modification or non-JSON; use original bytes
           forwardBuffer = bodyBuffer;
+        }
+
+        // If plugins modified the body, remove content-encoding since
+        // the re-serialized body is uncompressed plain JSON.
+        if (bodyWasModified && contentEncoding) {
+          delete ctx.headers["content-encoding"];
         }
 
         const targetParsed = url.parse(targetUrl);
