@@ -1,3 +1,11 @@
+/**
+ * Replay command: re-send a captured request to the LLM API.
+ *
+ * Reads a capture JSON file, optionally swaps the model, and sends the
+ * request directly to the upstream (not through the proxy). Useful for
+ * debugging, testing model differences, or reproducing issues.
+ */
+
 import fs from "node:fs";
 import https from "node:https";
 import http from "node:http";
@@ -7,6 +15,7 @@ import type { CaptureData } from "@contextio/core";
 
 import type { ReplayArgs } from "./args.js";
 
+/** Look up an API key from environment variables for the given provider. */
 function getApiKey(provider: string): string | null {
   switch (provider) {
     case "anthropic":
@@ -28,6 +37,7 @@ function getApiKey(provider: string): string | null {
   }
 }
 
+/** Build the provider-specific auth header (x-api-key for Anthropic, Bearer for OpenAI, etc). */
 function buildAuthHeader(provider: string, apiKey: string): { key: string; value: string } {
   switch (provider) {
     case "anthropic":
@@ -39,6 +49,7 @@ function buildAuthHeader(provider: string, apiKey: string): { key: string; value
   }
 }
 
+/** Make an HTTP(S) request and collect the full response. 60s timeout. */
 function makeRequest(
   url: string,
   method: string,
@@ -93,6 +104,7 @@ function formatJson(text: string): string {
   }
 }
 
+/** Produce a simple diff of content and usage between original and replayed responses. */
 function findJsonDiff(original: string, replay: string): string {
   const orig = JSON.parse(original);
   const repl = JSON.parse(replay);
@@ -139,6 +151,12 @@ function findJsonDiff(original: string, replay: string): string {
   return diffLines.length > 0 ? diffLines.join("\n") : "(no significant differences)";
 }
 
+/**
+ * Re-send a captured request to the API and display the response.
+ *
+ * With --diff, shows differences between the original and new response.
+ * With --model, swaps the model before sending.
+ */
 export async function runReplay(args: ReplayArgs): Promise<void> {
   const { captureFile, diff, model } = args;
 

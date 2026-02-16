@@ -1,3 +1,10 @@
+/**
+ * Export command: bundle session captures into a single shareable JSON file.
+ *
+ * Optionally redacts request/response bodies (keeping only metadata)
+ * for sharing without leaking prompts or generated content.
+ */
+
 import fs from "node:fs";
 
 import type { CaptureData } from "@contextio/core";
@@ -5,6 +12,7 @@ import type { CaptureData } from "@contextio/core";
 import type { ExportArgs } from "./args.js";
 import { findLastSessionId, loadSessionCaptures } from "./captures.js";
 
+/** The shape of an exported session file. */
 interface ExportSession {
   sessionId: string;
   source: string;
@@ -17,6 +25,7 @@ interface ExportSession {
   };
 }
 
+/** Strip request/response bodies from a capture, keeping only metadata. */
 function redactCapture(capture: CaptureData): CaptureData {
   return {
     ...capture,
@@ -25,6 +34,11 @@ function redactCapture(capture: CaptureData): CaptureData {
   };
 }
 
+/**
+ * Export a session's captures to a single JSON file.
+ *
+ * @returns Exit code (0 on success, 1 on error).
+ */
 export async function runExport(args: ExportArgs): Promise<number> {
   let sessionId = args.session;
 

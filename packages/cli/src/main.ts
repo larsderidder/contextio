@@ -3,7 +3,15 @@
 /**
  * Contextio CLI entry point.
  *
- * Single binary that wires together the proxy, redact, and logger packages.
+ * Wires together proxy, redact, and logger packages into a single binary.
+ * Handles three execution modes:
+ * - Standalone: `ctxio proxy` (runs proxy until SIGINT)
+ * - Wrap: `ctxio proxy -- claude` (starts proxy, spawns tool, cleans up on exit)
+ * - Attach: `ctxio attach claude` (connects tool to already-running proxy)
+ *
+ * The wrap mode uses a shared proxy with reference counting. Multiple
+ * `ctxio proxy -- <tool>` invocations share a single proxy process;
+ * the proxy shuts down when the last tool exits.
  */
 
 import { randomBytes } from "node:crypto";
@@ -36,20 +44,29 @@ const MITM_PORT = 8080;
 const MITM_ADDON_PATH = join(__dirname, "..", "mitm_addon.py");
 const MITM_START_TIMEOUT_MS = 8000;
 const PROXY_START_TIMEOUT_MS = 8000;
+/** Lockfile for coordinating shared proxy instances across wrap invocations. */
 const PROXY_LOCKFILE = "/tmp/contextio.lock";
 
+/**
+ * Shared proxy lock state, written to PROXY_LOCKFILE.
+ *
+ * `count` tracks how many wrap processes are using this proxy.
+ * When count reaches 0, the proxy is stopped.
+ */
 interface ProxyLockState {
   count: number;
   pid: number;
   port: number;
 }
 
+/** State persisted for background proxy (started with `proxy -d`). */
 interface BackgroundState {
   pid: number;
   port: number;
   startedAt: string;
 }
 
+/** Search PATH for an executable. Returns the full path or null. */
 function findBinaryOnPath(binary: string): string | null {
   const pathEnv = process.env.PATH;
   if (!pathEnv) return null;
@@ -105,6 +122,7 @@ function clearProxyLock(): void {
   }
 }
 
+/** Check if a process is still running (signal 0 trick). */
 function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -146,6 +164,7 @@ function clearBackgroundState(): void {
   }
 }
 
+/** Create a directory (recursive) and verify it's writable. */
 function ensureWritableDir(dir: string): { ok: boolean; details?: string } {
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -159,6 +178,7 @@ function ensureWritableDir(dir: string): { ok: boolean; details?: string } {
   }
 }
 
+/** Check if something is listening on a TCP port (600ms timeout). */
 function isPortListening(port: number, host = "127.0.0.1"): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.connect({ port, host }, () => {
@@ -173,6 +193,7 @@ function isPortListening(port: number, host = "127.0.0.1"): Promise<boolean> {
   });
 }
 
+/** Bind port 0 to get an OS-assigned ephemeral port, then release it. */
 function reserveEphemeralPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -189,11 +210,13 @@ function reserveEphemeralPort(): Promise<number> {
   });
 }
 
+/** Use the preferred mitmproxy port, or pick an ephemeral one if it's taken. */
 async function chooseMitmPort(preferredPort: number): Promise<number> {
   if (!(await isPortListening(preferredPort))) return preferredPort;
   return reserveEphemeralPort();
 }
 
+/** Reconstruct CLI argv for spawning a shared proxy subprocess. */
 function buildProxyArgs(args: ProxyArgs, port: number): string[] {
   const out = ["proxy", "--port", String(port)];
   if (args.bind) out.push("--bind", args.bind);
@@ -217,6 +240,7 @@ function buildProxyArgs(args: ProxyArgs, port: number): string[] {
   return out;
 }
 
+/** Poll until a port is listening, or timeout. Returns true if ready. */
 async function waitForPort(
   port: number,
   timeoutMs: number,
@@ -230,6 +254,7 @@ async function waitForPort(
   return false;
 }
 
+/** Run diagnostics: check mitmproxy, certs, capture dir, ports, lockfile, background state. */
 async function runDoctor(): Promise<number> {
   console.log(`ctxio doctor v${VERSION}`);
 
@@ -284,6 +309,7 @@ async function runDoctor(): Promise<number> {
   return 0;
 }
 
+/** Manage the background (detached) proxy: start, stop, or check status. */
 async function runBackground(
   action: "start" | "stop" | "status",
 ): Promise<number> {
@@ -367,6 +393,14 @@ async function runBackground(
   return 0;
 }
 
+/**
+ * Ensure a shared proxy is running for wrap mode.
+ *
+ * If a proxy is already running (tracked via lockfile), increments the
+ * reference count. Otherwise spawns a new detached proxy process.
+ *
+ * @returns The proxy port and whether this caller should manage the ref count.
+ */
 async function ensureSharedProxyForWrap(
   args: ProxyArgs,
 ): Promise<{ proxyPort: number; manageRef: boolean }> {
@@ -417,6 +451,10 @@ async function ensureSharedProxyForWrap(
   return { proxyPort, manageRef: true };
 }
 
+/**
+ * Decrement the shared proxy reference count. When it hits zero,
+ * send SIGTERM to the proxy process and remove the lockfile.
+ */
 function releaseSharedProxyRef(manageRef: boolean): void {
   if (!manageRef) return;
   const lock = readProxyLock();
@@ -436,6 +474,7 @@ function releaseSharedProxyRef(manageRef: boolean): void {
   writeProxyLock({ ...lock, count: next });
 }
 
+/** Create the plugin array from CLI args (redact + logger based on flags). */
 function buildPlugins(args: ProxyArgs): ProxyPlugin[] {
   const plugins: ProxyPlugin[] = [];
 
@@ -460,6 +499,7 @@ function buildPlugins(args: ProxyArgs): ProxyPlugin[] {
   return plugins;
 }
 
+/** Print a summary of active plugins, redaction config, and log directory. */
 function printStartupInfo(plugins: ProxyPlugin[], args: ProxyArgs, isWrap = false): void {
   const names = plugins.map((p) => p.name);
   if (names.length > 0) {
@@ -519,8 +559,11 @@ async function runStandalone(args: ProxyArgs): Promise<void> {
 }
 
 /**
- * Start the proxy, spawn a child command routed through it,
- * and shut down when the child exits.
+ * Wrap mode: start a shared proxy, spawn the child tool routed through
+ * it, and clean up everything when the child exits.
+ *
+ * For tools that need mitmproxy (Codex, Copilot, OpenCode), also starts
+ * mitmproxy in upstream mode between the tool and the proxy.
  */
 async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
   const plugins = buildPlugins(args);

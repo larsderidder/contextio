@@ -1,5 +1,9 @@
 /**
- * Shared utilities for reading capture files from the capture directory.
+ * Shared utilities for reading capture files from disk.
+ *
+ * Used by the inspect, monitor, export, and replay commands. All
+ * functions default to `~/.contextio/captures` when no directory
+ * is specified.
  */
 
 import fs from "node:fs";
@@ -8,12 +12,15 @@ import { join } from "node:path";
 
 import type { CaptureData } from "@contextio/core";
 
-/** Default capture directory: ~/.contextio/captures */
+/** Default capture directory: `~/.contextio/captures`. */
 export function captureDir(): string {
   return join(homedir(), ".contextio", "captures");
 }
 
-/** List all .json capture files in the directory, sorted by name. */
+/**
+ * List all `.json` capture files in a directory, sorted lexicographically.
+ * Excludes `.tmp` files (incomplete atomic writes).
+ */
 export function listCaptureFiles(dir?: string): string[] {
   const d = dir ?? captureDir();
   if (!fs.existsSync(d)) return [];
@@ -23,7 +30,7 @@ export function listCaptureFiles(dir?: string): string[] {
     .sort();
 }
 
-/** Read and parse a capture file. Returns null on any error. */
+/** Read and parse a single capture file. Returns null on any error. */
 export function readCapture(filepath: string): CaptureData | null {
   try {
     const raw = fs.readFileSync(filepath, "utf8");
@@ -33,7 +40,10 @@ export function readCapture(filepath: string): CaptureData | null {
   }
 }
 
-/** Find the session ID of the most recent capture. */
+/**
+ * Find the session ID of the most recent capture file.
+ * Scans from the end of the sorted file list for efficiency.
+ */
 export function findLastSessionId(dir?: string): string | null {
   const d = dir ?? captureDir();
   const files = listCaptureFiles(d);
@@ -46,7 +56,7 @@ export function findLastSessionId(dir?: string): string | null {
   return null;
 }
 
-/** Load all captures for a given session ID. */
+/** Load all captures belonging to a given session ID, in file order. */
 export function loadSessionCaptures(sessionId: string, dir?: string): CaptureData[] {
   const d = dir ?? captureDir();
   const files = listCaptureFiles(d);

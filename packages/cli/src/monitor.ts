@@ -1,3 +1,11 @@
+/**
+ * Live traffic monitor.
+ *
+ * Shows a table of API requests as they happen, with model, status,
+ * latency, token counts, and estimated cost. Uses fs.watch() to
+ * detect new capture files as they're written by the logger plugin.
+ */
+
 import fs from "node:fs";
 import { join } from "node:path";
 
@@ -6,6 +14,7 @@ import { estimateCost, parseResponseUsage, type CaptureData } from "@contextio/c
 import type { MonitorArgs } from "./args.js";
 import { captureDir, listCaptureFiles, readCapture } from "./captures.js";
 
+/** Formatted fields for a single capture, ready for display. */
 interface CaptureDisplay {
   time: string;
   source: string;
@@ -18,6 +27,7 @@ interface CaptureDisplay {
   sessionId: string | null;
 }
 
+/** Extract the model name from a capture's request body. */
 function parseModelName(capture: CaptureData): string {
   const body = capture.requestBody;
   if (!body || typeof body !== "object") return "?";
@@ -55,6 +65,7 @@ function formatTime(timestamp: string): string {
   return date.toTimeString().slice(0, 8);
 }
 
+/** Parse a capture file into a display row. Returns null on read errors. */
 function loadCaptureDisplay(filepath: string): CaptureDisplay | null {
   const capture = readCapture(filepath);
   if (!capture) return null;
@@ -87,6 +98,7 @@ function loadCaptureDisplay(filepath: string): CaptureDisplay | null {
   };
 }
 
+/** Format a capture as a fixed-width table row with ANSI status coloring. */
 function formatDisplayRow(c: CaptureDisplay): string {
   const statusColor = c.status >= 200 && c.status < 300 ? "\x1b[32m" : "\x1b[31m";
   const reset = "\x1b[0m";
@@ -102,6 +114,7 @@ function formatDisplayRow(c: CaptureDisplay): string {
   );
 }
 
+/** Build a summary line with session count, total requests, tokens, and cost. */
 function getTotalsLine(displays: CaptureDisplay[]): string {
   const sessions = new Set(displays.map((d) => d.sessionId).filter(Boolean)).size;
   const totalIn = displays.reduce((sum, d) => sum + d.tokensIn, 0);
@@ -126,6 +139,7 @@ function matchesFilter(c: CaptureDisplay, args: MonitorArgs): boolean {
   return true;
 }
 
+/** Parse a duration string like "30m", "1h", "60s" into milliseconds. */
 function parseLastArg(arg: string): number | null {
   const match = arg.match(/^(\d+)([smh])$/);
   if (!match) return null;
@@ -155,6 +169,12 @@ function listExistingCaptures(args: MonitorArgs): string[] {
     });
 }
 
+/**
+ * Run the live traffic monitor.
+ *
+ * Prints existing captures matching the filter (if --last or --session),
+ * then watches the capture directory for new files. Runs until Ctrl-C.
+ */
 export async function runMonitor(args: MonitorArgs): Promise<void> {
   const dir = captureDir();
 

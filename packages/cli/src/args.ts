@@ -1,16 +1,22 @@
 /**
- * Argument parser for the Contextio CLI.
+ * CLI argument parsing.
  *
- * Uses Commander for parsing and help generation.
+ * Uses Commander to define subcommands (proxy, attach, monitor, inspect,
+ * replay, export, doctor) and parse argv into typed result objects.
+ * The parser never calls process.exit; instead it returns ParseResult
+ * which is either a typed args object or a ParseError.
  */
 
 import { Command } from "commander";
 
+/** Parsed arguments for `ctxio proxy`. */
 export interface ProxyArgs {
   command: "proxy";
+  /** "start" for normal operation, "stop"/"status" for background control. */
   action: "start" | "stop" | "status";
   port: number;
   bind: string;
+  /** Run in background (detached) mode. */
   detach: boolean;
   redact: boolean;
   redactPreset: string;
@@ -21,49 +27,64 @@ export interface ProxyArgs {
   logDir: string | null;
   logMaxSessions: number;
   verbose: boolean;
+  /** Command and args after "--" to wrap, or null for standalone proxy. */
   wrap: string[] | null;
 }
 
+/** Parsed arguments for `ctxio attach <tool>`. */
 export interface AttachArgs {
   command: "attach";
   port: number;
+  /** Command and args to run through the proxy. */
   wrap: string[];
 }
 
+/** Parsed arguments for `ctxio monitor`. */
 export interface MonitorArgs {
   command: "monitor";
   session: string | null;
+  /** Duration filter like "1h", "30m". Show recent captures then watch. */
   last: string | null;
   source: string | null;
 }
 
+/** Parsed arguments for `ctxio inspect`. */
 export interface InspectArgs {
   command: "inspect";
   session: string | null;
+  /** Inspect the most recent session. */
   last: boolean;
   source: string | null;
+  /** Show full system prompt without truncation. */
   full: boolean;
 }
 
+/** Parsed arguments for `ctxio replay`. */
 export interface ReplayArgs {
   command: "replay";
   captureFile: string;
+  /** Show diff between original and new response. */
   diff: boolean;
+  /** Swap the model before replaying. */
   model: string | null;
 }
 
+/** Parsed arguments for `ctxio export`. */
 export interface ExportArgs {
   command: "export";
   session: string | null;
   last: boolean;
   outputPath: string | null;
+  /** Strip request/response bodies, keep metadata only. */
   redact: boolean;
 }
 
+/** Parsed arguments for `ctxio doctor`. */
 export interface DoctorArgs {
   command: "doctor";
 }
 
+/** Union of all successfully parsed command types. */
 export type ParsedArgs =
   | ProxyArgs
   | AttachArgs
@@ -73,16 +94,20 @@ export type ParsedArgs =
   | ExportArgs
   | DoctorArgs;
 
+/** Returned when argument parsing fails. */
 export interface ParseError {
   error: string;
 }
 
+/** Either a successfully parsed command or a parse error. */
 export type ParseResult = ParsedArgs | ParseError;
 
+/** Type guard for ParseError. */
 export function isError(result: ParseResult): result is ParseError {
   return "error" in result;
 }
 
+/** Build the Commander program with all subcommands. Results are emitted via callback. */
 export function buildProgram(
   onResult: (result: ParseResult) => void,
 ): Command {
@@ -279,6 +304,7 @@ export function buildProgram(
   return program;
 }
 
+/** Parse process.argv into a typed result. Never calls process.exit on parse errors. */
 export function parseArgs(argv: string[]): ParseResult {
   let result: ParseResult | null = null;
 
@@ -318,6 +344,7 @@ export function parseArgs(argv: string[]): ParseResult {
   return { error: "No command specified" };
 }
 
+/** Get help text for a specific command or the top-level program. */
 export function getHelp(topic?: string | null): string {
   const program = buildProgram(() => {});
   if (topic) {

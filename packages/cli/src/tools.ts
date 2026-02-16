@@ -1,17 +1,21 @@
 /**
  * Tool-specific proxy configuration.
  *
- * Each AI tool has its own way of accepting a base URL override.
- * This module knows how to set the right env vars for each tool.
+ * Each AI coding tool has its own way of accepting a base URL override.
+ * This module maps tool names to the right environment variables and
+ * determines whether mitmproxy is needed.
  */
 
+/** Environment configuration for routing a tool through the proxy. */
 export interface ToolEnv {
-  /** Environment variables to set for the child process. */
+  /** Environment variables to set on the child process. */
   env: Record<string, string>;
   /**
-   * Whether the tool needs mitmproxy as a TLS-terminating forward proxy
-   * chained into the contextio proxy via upstream mode. This is for tools
-   * that respect HTTPS_PROXY but ignore base URL overrides.
+   * Whether the tool needs mitmproxy as a TLS-terminating forward proxy.
+   *
+   * Some tools (Codex, Copilot, OpenCode) ignore base URL overrides but
+   * respect HTTPS_PROXY. For those, mitmproxy terminates TLS and chains
+   * traffic through the contextio proxy for redaction and logging.
    */
   needsMitm?: boolean;
 }
@@ -19,8 +23,13 @@ export interface ToolEnv {
 /**
  * Build environment variables to route a tool through the proxy.
  *
- * The proxy URL includes a source tag so captures can be attributed
- * to the originating tool (shows up as the "source" field in captures).
+ * Constructs a source-tagged URL (`http://127.0.0.1:4040/claude/ab12cd34`)
+ * that the proxy uses to attribute captures to specific tools and sessions.
+ *
+ * @param command - Tool binary name (e.g. "claude", "codex", "gemini").
+ * @param proxyUrl - The proxy base URL (e.g. "http://127.0.0.1:4040").
+ * @param sessionId - Optional 8-char hex session ID for capture grouping.
+ * @returns Env vars to set and whether mitmproxy is needed.
  */
 export function getToolEnv(
   command: string,

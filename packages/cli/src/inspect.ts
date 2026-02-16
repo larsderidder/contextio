@@ -1,3 +1,11 @@
+/**
+ * Session inspector.
+ *
+ * Lists available sessions or deep-inspects a specific one, showing
+ * the system prompt, tool definitions, first user message, and context
+ * overhead estimates.
+ */
+
 import fs from "node:fs";
 import { join } from "node:path";
 
@@ -6,6 +14,7 @@ import { estimateTokens, type CaptureData } from "@contextio/core";
 import type { InspectArgs } from "./args.js";
 import { captureDir, listCaptureFiles, readCapture } from "./captures.js";
 
+/** Summary of a session extracted from its first capture. */
 interface SessionInfo {
   sessionId: string;
   source: string;
@@ -17,12 +26,14 @@ interface SessionInfo {
   totalRequests: number;
 }
 
+/** A tool definition extracted from the request body. */
 interface ToolDefinition {
   name: string;
   description: string;
   paramCount: number;
 }
 
+/** Find capture files matching the inspect arguments (session, source, --last). */
 function findSessionFiles(args: InspectArgs): string[] {
   const dir = captureDir();
   const files = listCaptureFiles(dir);
@@ -52,6 +63,7 @@ function findSessionFiles(args: InspectArgs): string[] {
   return [];
 }
 
+/** Extract system prompt and tool definitions from an Anthropic Messages API request. */
 function extractAnthropicSystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
@@ -83,6 +95,7 @@ function extractAnthropicSystemPrompt(body: Record<string, any>): { system: stri
   return { system, tools };
 }
 
+/** Extract system prompt and tool definitions from an OpenAI Chat Completions request. */
 function extractOpenAISystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
@@ -119,6 +132,7 @@ function extractOpenAISystemPrompt(body: Record<string, any>): { system: string 
   return { system, tools };
 }
 
+/** Extract system instruction and tool declarations from a Gemini API request. */
 function extractGeminiSystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
@@ -152,6 +166,7 @@ function extractGeminiSystemPrompt(body: Record<string, any>): { system: string 
   return { system, tools };
 }
 
+/** Extract system prompt and tools from a capture, dispatching by provider. */
 function extractSystemPrompt(capture: CaptureData): { system: string | null; tools: ToolDefinition[] } {
   const body = capture.requestBody;
   if (!body || typeof body !== "object") {
@@ -172,6 +187,7 @@ function extractSystemPrompt(capture: CaptureData): { system: string | null; too
   return extractOpenAISystemPrompt(body);
 }
 
+/** Extract the first user message from the conversation in a capture. */
 function getFirstUserMessage(capture: CaptureData): string | null {
   const body = capture.requestBody;
   if (!body || typeof body !== "object") return null;
@@ -231,6 +247,7 @@ function printTools(tools: ToolDefinition[]): void {
   }
 }
 
+/** Print estimated token overhead for system prompt, tools, and first user message. */
 function printContextOverhead(system: string | null, tools: ToolDefinition[], firstUser: string | null): void {
   const sysTokens = system ? estimateTokens(system) : 0;
   const toolDescTokens = tools.reduce((sum, t) => sum + estimateTokens(t.description), 0);
@@ -248,6 +265,7 @@ function printContextOverhead(system: string | null, tools: ToolDefinition[], fi
   }
 }
 
+/** List all sessions in a table (session ID, source, provider, request count, time). */
 function listSessions(args: InspectArgs): void {
   const dir = captureDir();
   const files = listCaptureFiles(dir);
@@ -299,6 +317,12 @@ function listSessions(args: InspectArgs): void {
   console.log(`\nUse 'ctxio inspect --session <id>' to inspect a session.`);
 }
 
+/**
+ * Run the inspect command.
+ *
+ * Without a session argument: lists all sessions. With a session (or --last):
+ * shows system prompt, tool definitions, context overhead, and first user message.
+ */
 export async function runInspect(args: InspectArgs): Promise<void> {
   const dir = captureDir();
 
@@ -333,7 +357,6 @@ export async function runInspect(args: InspectArgs): Promise<void> {
     process.exit(1);
   }
 
-  let sessionInfo: SessionInfo | null = null;
   const captures: CaptureData[] = [];
 
   for (const filepath of files) {
@@ -351,7 +374,7 @@ export async function runInspect(args: InspectArgs): Promise<void> {
   const { system, tools } = extractSystemPrompt(first);
   const firstUser = getFirstUserMessage(first);
 
-  sessionInfo = {
+  const sessionInfo: SessionInfo = {
     sessionId: first.sessionId || "?",
     source: first.source || "?",
     provider: first.provider,
