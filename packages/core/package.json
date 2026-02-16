@@ -19,6 +19,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
+    "test": "node --test test/*.test.ts",
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {

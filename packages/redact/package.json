@@ -17,10 +17,9 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:test": "tsc -p tsconfig.test.json",
-    "test": "pnpm run build:test && node --test 'dist-test/test/**/*.test.js'",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist dist-test",
+    "clean": "rm -rf dist",
+    "test": "node --test test/*.test.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
