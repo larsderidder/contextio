@@ -284,8 +284,13 @@ function listSessions(args: InspectArgs): void {
     process.exit(1);
   }
 
+  // Sort by first capture time (most recent last)
+  const sorted = [...sessions.entries()].sort(
+    (a, b) => new Date(a[1].firstTime).getTime() - new Date(b[1].firstTime).getTime(),
+  );
+
   console.log(" SESSION     SOURCE      PROVIDER    REQUESTS  TIME");
-  for (const [id, info] of sessions) {
+  for (const [id, info] of sorted) {
     const time = new Date(info.firstTime).toLocaleString();
     console.log(
       ` ${id.padEnd(10)}  ${info.source.padEnd(10)}  ${info.provider.padEnd(10)}  ${String(info.count).padEnd(8)}  ${time}`,

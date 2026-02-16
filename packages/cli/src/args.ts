@@ -1,11 +1,6 @@
 /**
  * Argument parser for the Contextio CLI.
- *
- * Hand-rolled for zero dependencies, with Commander used only for
- * version and help display.
  */
-
-import { Command } from "commander";
 
 // Re-export types for external use
 export interface ProxyOptions {
@@ -103,46 +98,9 @@ export function isError(result: ParseResult): result is ParseError {
   return "error" in result;
 }
 
-// --- Help text using Commander ---
+// --- Help text ---
 
-const program = new Command();
-
-export function getHelp(topic?: string | null): string {
-  // Use Commander to generate help
-  try {
-    const helpCmd = new Command();
-    helpCmd.exitOverride().configureOutput({ writeErr: () => {}, writeOut: () => {} });
-    helpCmd
-      .name("ctxio")
-      .description("LLM API proxy toolkit")
-      .version("0.0.1")
-      .command("proxy", { isDefault: true })
-      .description("Start the LLM API proxy")
-      .option("-p, --port <number>", "Port to listen on", "4040")
-      .option("--bind <host>", "Bind address", "127.0.0.1")
-      .option("-r, --redact", "Enable PII/secret redaction")
-      .option("-P, --preset <name>", "Preset: secrets, pii, strict", "pii")
-      .option("-f, --redact-policy <path>", "Policy file")
-      .option("-R, --redact-reversible", "Restore redacted values")
-      .option("--no-log", "Disable capture logging")
-      .option("--log-dir <path>", "Capture directory")
-      .option("--log-max-sessions <n>", "Max sessions", "0")
-      .option("--verbose", "Show detailed activity")
-      .argument("[args...]", "Command to wrap");
-    
-    if (topic) {
-      // Try to get help for specific command
-      if (topic === "proxy") {
-        return helpCmd.command("proxy").helpInformation();
-      }
-      return `Unknown help topic: ${topic}`;
-    }
-    return helpCmd.helpInformation();
-  } catch {
-    // Fallback to simple help
-  }
-  
-  return `
+const MAIN_HELP = `
 ctxio - LLM API proxy toolkit
 
 Usage:
@@ -156,11 +114,142 @@ Commands:
   inspect    Inspect session prompts and tool definitions
   replay     Re-send captured requests to the API
   export     Bundle session captures into a shareable file
-  doctor     Run local diagnostics
+  doctor     Run local diagnostics (ports, certs, capture dir)
   version    Show version
 
 Run 'ctxio help <command>' for details.
 `.trim();
+
+const PROXY_HELP = `
+ctxio proxy [options] [-- <command> [args...]]
+
+Start the LLM API proxy. If a command is given after --, the proxy starts,
+routes the tool through it, runs the command, and shuts down when it exits.
+Tools that ignore base URL overrides (Codex, Copilot, OpenCode) are routed
+through mitmproxy automatically.
+
+Options:
+  -p, --port <number>        Port to listen on (default: 4040)
+  --bind <host>              Bind address (default: 127.0.0.1)
+  -r, --redact               Enable PII/secret redaction (default preset: pii)
+  -P, --redact-preset <name> Preset: secrets, pii, strict (default: pii)
+  -f, --redact-policy <path> Path to a redaction policy JSON file
+  -R, --redact-reversible    Restore redacted values in responses
+  --no-log                   Disable capture logging (logging is on by default)
+  --log-dir <path>           Directory for capture files (default: ~/.contextio/captures)
+  --log-max-sessions <n>     Keep only the last N sessions (default: 0 = unlimited)
+  --verbose                  Show per-request traffic logs
+  -h, --help                 Show this help
+
+Examples:
+  ctxio proxy                            Start proxy with logging
+  ctxio proxy --redact -- claude         Wrap claude with redaction
+  ctxio proxy --redact -- codex          Wrap codex (via mitmproxy)
+  ctxio proxy -- copilot                 Wrap copilot with logging
+  ctxio proxy --redact-reversible -- pi  Transparent redaction
+`.trim();
+
+const ATTACH_HELP = `
+ctxio attach [options] <command> [args...]
+
+Run a command routed through an already-running proxy. The proxy must be
+started separately (e.g. 'ctxio proxy --redact' in another terminal).
+
+Options:
+  -p, --port <number>  Port the proxy is listening on (default: 4040)
+  -h, --help           Show this help
+
+Examples:
+  ctxio attach claude                Attach claude to running proxy
+  ctxio attach codex                 Attach codex (starts mitmproxy)
+  ctxio attach --port 5050 claude    Use non-default port
+`.trim();
+
+const MONITOR_HELP = `
+ctxio monitor [options]
+
+Watch for API traffic in real-time. Without --last or --session, only
+shows new captures as they arrive.
+
+Options:
+  --session <id>     Show captures for a specific session
+  --last <duration>  Show recent captures, then keep watching (e.g. 1h, 30m, 60s)
+  --source <name>    Filter by source tool (e.g. claude, codex, copilot)
+  -h, --help         Show this help
+
+Examples:
+  ctxio monitor                         Watch for new captures
+  ctxio monitor --last 1h               Show last hour + watch
+  ctxio monitor --session a1b2c3d4      Show a specific session
+  ctxio monitor --source codex          Only show codex traffic
+`.trim();
+
+const INSPECT_HELP = `
+ctxio inspect [options]
+
+List sessions or inspect a specific one. Shows system prompts, tool
+definitions, and context overhead.
+
+Without options, lists all captured sessions. Use --source to filter,
+--session or --last to inspect a specific session.
+
+Options:
+  --session <id>   Inspect a specific session (8 hex chars)
+  --last           Inspect the most recent session
+  --source <name>  Filter sessions by tool (e.g. claude, codex)
+  --full           Show full system prompt (don't truncate)
+  -h, --help       Show this help
+
+Examples:
+  ctxio inspect                       List all sessions
+  ctxio inspect --source codex        List codex sessions
+  ctxio inspect --last                Inspect most recent session
+  ctxio inspect --session a1b2c3d4    Inspect specific session
+  ctxio inspect --source claude --last  Inspect latest claude session
+`.trim();
+
+const REPLAY_HELP = `
+ctxio replay <capture-file> [options]
+
+Re-send a captured request to the API and show or diff the response.
+
+Options:
+  --diff           Show diff between original and new response
+  --model <name>   Swap the model in the request
+  -h, --help       Show this help
+
+Examples:
+  ctxio replay captures/abc123.json          Re-send and print response
+  ctxio replay captures/abc123.json --diff   Compare with original
+`.trim();
+
+const EXPORT_HELP = `
+ctxio export <sessionId> [options]
+
+Bundle a session's captures into a single shareable file.
+
+Options:
+  --last              Export the most recent session
+  -o, --output <path> Output file path (default: session-<id>.json)
+  --redact            Strip request/response bodies, keep metadata only
+  -h, --help          Show this help
+
+Examples:
+  ctxio export a1b2c3d4                  Export session
+  ctxio export --last                    Export most recent session
+  ctxio export a1b2c3d4 -o report.json   Custom output path
+`.trim();
+
+export function getHelp(topic?: string | null): string {
+  switch (topic) {
+    case "proxy": return PROXY_HELP;
+    case "attach": return ATTACH_HELP;
+    case "monitor": return MONITOR_HELP;
+    case "inspect": return INSPECT_HELP;
+    case "replay": return REPLAY_HELP;
+    case "export": return EXPORT_HELP;
+    default: return MAIN_HELP;
+  }
 }
 
 // --- Parser ---
