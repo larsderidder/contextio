@@ -14,18 +14,22 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org/
+          node-version: 24
+      - run: npm config set registry https://registry.npmjs.org/
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
       - name: Verify packages built
         run: |
-          # CLI has main.js, others have index.js
           [ -f "packages/cli/dist/main.js" ] || { echo "ERROR: CLI dist/main.js missing"; exit 1; }
           [ -f "packages/core/dist/index.js" ] || { echo "ERROR: core dist/index.js missing"; exit 1; }
           [ -f "packages/proxy/dist/index.js" ] || { echo "ERROR: proxy dist/index.js missing"; exit 1; }
           [ -f "packages/redact/dist/index.js" ] || { echo "ERROR: redact dist/index.js missing"; exit 1; }
           [ -f "packages/logger/dist/index.js" ] || { echo "ERROR: logger dist/index.js missing"; exit 1; }
           echo "All packages built successfully"
-      - run: pnpm publish --recursive --access public --provenance --no-git-checks
+      - name: Publish to npm
+        run: |
+          for pkg in packages/core packages/logger packages/proxy packages/redact packages/cli; do
+            echo "=== Publishing $pkg ==="
+            (cd "$pkg" && npm publish --access public)
+          done
