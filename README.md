@@ -1,13 +1,14 @@
-# contextio
+# ContextIO - Control your context
 
 [![CI](https://github.com/larsderidder/contextio/actions/workflows/ci.yml/badge.svg)](https://github.com/larsderidder/contextio/actions/workflows/ci.yml)
-[![Publish](https://github.com/larsderidder/contextio/actions/workflows/publish.yml/badge.svg)](https://github.com/larsderidder/contextio/actions/workflows/publish.yml)
 [![npm](https://img.shields.io/npm/v/@contextio/cli)](https://www.npmjs.com/package/@contextio/cli)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 A local proxy that sits between your AI coding tools and the LLM APIs they call. Logs every request and response, optionally strips PII and secrets before anything leaves your machine.
 
-Your API keys pass through this thing, so the proxy has zero external dependencies. Read the code.
+I built this because I get nervous sending data I don't see to LLM's. Now at least I know if they are gossiping about me.
+
+All your stuff passes through this thing, so the proxy has zero external dependencies. Read the code, it's small.
 
 ## Install
 
@@ -51,7 +52,7 @@ ctxio attach claude
 ctxio proxy stop
 ```
 
-`contextio` is a longer alias for `ctxio`.
+`contextio` is a longer alias for `ctxio` for those who just _love_ typing.
 
 ## Commands
 
@@ -256,6 +257,8 @@ This is opt-in. It keeps originals in memory and reconstructs SSE events on the 
 ```
 
 Full reference in [docs/redaction-policy.md](docs/redaction-policy.md). Examples in [examples/](examples/).
+
+See [docs/FAQ.md](docs/FAQ.md) for common questions about redaction, troubleshooting, and usage patterns.
 
 ## Logging
 
