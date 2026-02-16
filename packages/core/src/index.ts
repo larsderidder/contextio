@@ -1,21 +1,26 @@
 /**
- * @contextio/core - Shared types, routing, and header utilities.
+ * @contextio/core
  *
- * The contract layer for the @context ecosystem. Zero npm dependencies.
- * No HTTP server, no proxy handler. Just types and pure functions.
+ * Shared types, routing, and utility functions for the contextio ecosystem.
+ * This is the contract layer: every other `@contextio/*` package depends on it.
+ *
+ * Zero npm dependencies. No HTTP server, no proxy handler. Just types and
+ * pure functions.
+ *
+ * @packageDocumentation
  */
 
-// Routing utilities
+// Routing: provider detection, source extraction, upstream URL resolution
 export {
   classifyRequest,
   extractSource,
   resolveTargetUrl,
 } from "./routing.js";
 
-// Header utilities
+// Header filtering: strip auth/secret headers before persisting captures
 export { SENSITIVE_HEADERS, selectHeaders } from "./headers.js";
 
-// Model utilities
+// Model metadata: pricing, context limits, known model list
 export {
   CONTEXT_LIMITS,
   MODEL_PRICING,
@@ -24,10 +29,10 @@ export {
   getKnownModels,
 } from "./models.js";
 
-// Token utilities
+// Token estimation: cheap char-based approximation with image awareness
 export { IMAGE_TOKEN_ESTIMATE, estimateTokens, countImageBlocks } from "./tokens.js";
 
-// Response parsing
+// Response parsing: extract usage/tokens from streaming and non-streaming responses
 export {
   extractResponseId,
   parseResponseUsage,
@@ -35,7 +40,7 @@ export {
   type ParsedResponseUsage,
 } from "./response.js";
 
-// Security scanning
+// Input security: prompt injection and suspicious pattern detection
 export {
   scanSecurity,
   scanRequestMessages,
@@ -45,7 +50,7 @@ export {
   type SecuritySummary,
 } from "./security.js";
 
-// Output security scanning
+// Output security: jailbreak outputs, dangerous code, URL scanning
 export {
   OUTPUT_BAN_SUBSTRINGS,
   scanBanSubstrings,
@@ -58,7 +63,7 @@ export {
   type OutputScanResult,
 } from "./output-scanner.js";
 
-// Types
+// Core types used across all packages
 export type {
   ApiFormat,
   CaptureData,

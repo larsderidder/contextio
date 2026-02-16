@@ -1,10 +1,12 @@
 /**
  * Request routing for the proxy.
  *
- * Detects which LLM provider a request targets, extracts source tool tags,
- * and resolves the upstream URL. Zero external dependencies.
+ * Three responsibilities:
+ * 1. Classify requests by provider and API format (path/header heuristics)
+ * 2. Extract source tool tags and session IDs from URL path prefixes
+ * 3. Resolve the upstream URL to forward the request to
  *
- * Extracted from context-lens src/proxy/routing.ts.
+ * Zero external dependencies.
  */
 
 import type {
@@ -16,9 +18,11 @@ import type {
 } from "./types.js";
 
 /**
- * URL path segments that represent API resources rather than "source tool" prefixes.
+ * URL path segments that belong to known API routes, not source tool prefixes.
  *
- * Example: `/v1/messages` should not treat `v1` as a source tag.
+ * When the proxy sees `/v1/messages`, "v1" should be treated as an API
+ * version prefix, not as a source tool tag. This set prevents
+ * `extractSource()` from misidentifying API path segments as tools.
  */
 const API_PATH_SEGMENTS = new Set([
   "v1",
@@ -34,16 +38,20 @@ const API_PATH_SEGMENTS = new Set([
 ]);
 
 /**
- * Classify an incoming request into `{ provider, apiFormat }`.
+ * Classify an incoming request by provider and API format.
  *
- * All path/format heuristics live here to avoid drift between
- * routing and detection.
+ * Uses URL path patterns and header checks. All detection heuristics
+ * live here so routing and format detection stay in sync.
+ *
+ * Order matters: ChatGPT backend is checked first (it uses /api/ paths
+ * that could collide), then Anthropic, Gemini (before OpenAI because
+ * both use /models/), and finally OpenAI as the catch-all.
  */
 export function classifyRequest(
   pathname: string,
   headers: Record<string, string | undefined>,
 ): { provider: Provider; apiFormat: ApiFormat } {
-  // ChatGPT backend traffic (Codex subscription)
+  // ChatGPT backend (Codex subscription uses /api/ and /backend-api/ paths)
   if (pathname.match(/^\/(api|backend-api)\//))
     return { provider: "chatgpt", apiFormat: "chatgpt-backend" };
 
@@ -55,7 +63,7 @@ export function classifyRequest(
   if (headers["anthropic-version"])
     return { provider: "anthropic", apiFormat: "unknown" };
 
-  // Gemini: must come BEFORE openai catch-all (which matches /models/)
+  // Gemini (checked before OpenAI because both use /models/ paths)
   const isGeminiPath =
     pathname.includes(":generateContent") ||
     pathname.includes(":streamGenerateContent") ||
@@ -64,7 +72,7 @@ export function classifyRequest(
   if (isGeminiPath || headers["x-goog-api-key"])
     return { provider: "gemini", apiFormat: "gemini" };
 
-  // OpenAI
+  // OpenAI platform API (catch-all for Bearer sk- tokens)
   if (pathname.includes("/responses"))
     return { provider: "openai", apiFormat: "responses" };
   if (pathname.includes("/chat/completions"))
@@ -77,19 +85,22 @@ export function classifyRequest(
   return { provider: "unknown", apiFormat: "unknown" };
 }
 
-/**
- * Check if a string is a valid session ID (8 lowercase hex characters).
- */
+/** Check if a string looks like a session ID (8 lowercase hex chars). */
 function isSessionId(segment: string): boolean {
   return /^[a-f0-9]{8}$/.test(segment);
 }
 
 /**
- * Extract a "source tool" tag and optional session ID from a request path.
+ * Extract a source tool tag and optional session ID from a request path.
  *
- * Supported formats:
- *   `/claude/v1/messages`          => source: 'claude', sessionId: null
- *   `/claude/ab12cd34/v1/messages` => source: 'claude', sessionId: 'ab12cd34'
+ * The CLI prepends a source tag (and optionally a session ID) to the URL
+ * path so the proxy can attribute traffic to specific tools:
+ *
+ *   `/claude/v1/messages`          -> source="claude", sessionId=null, cleanPath="/v1/messages"
+ *   `/claude/ab12cd34/v1/messages` -> source="claude", sessionId="ab12cd34", cleanPath="/v1/messages"
+ *   `/v1/messages`                 -> source=null (no tag; path starts with a known API segment)
+ *
+ * Path traversal attempts (encoded slashes, ".." segments) are rejected.
  */
 export function extractSource(pathname: string): ExtractSourceResult {
   const match = pathname.match(/^\/([^/]+)(\/.*)?$/);
@@ -125,7 +136,16 @@ export function extractSource(pathname: string): ExtractSourceResult {
 }
 
 /**
- * Determine the final upstream target URL for a request.
+ * Determine the upstream URL to forward a request to.
+ *
+ * Checks for an explicit `x-target-url` header first (used by
+ * mitmproxy addon to specify the original destination). Falls back
+ * to the configured upstream base URL for the detected provider.
+ *
+ * @param pathname - Cleaned request path (source tag already stripped).
+ * @param search - Query string including "?", or null.
+ * @param headers - Request headers (may contain x-target-url).
+ * @param upstreams - Configured upstream base URLs per provider.
  */
 export function resolveTargetUrl(
   pathname: string,

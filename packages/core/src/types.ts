@@ -1,5 +1,5 @@
 /**
- * Core types for the @context proxy.
+ * Core types for the contextio proxy ecosystem.
  *
  * These are the public types that plugins and consumers depend on.
  * Zero external dependencies.
@@ -7,6 +7,13 @@
 
 // --- Provider / API format ---
 
+/**
+ * LLM API provider identifier.
+ *
+ * "chatgpt" is separate from "openai" because ChatGPT's backend API
+ * (used by Codex subscriptions) has a different format from the
+ * OpenAI platform API.
+ */
 export type Provider =
   | "anthropic"
   | "openai"
@@ -14,6 +21,12 @@ export type Provider =
   | "gemini"
   | "unknown";
 
+/**
+ * Wire format of the API request.
+ *
+ * Used to determine how to parse request/response bodies for token
+ * usage, streaming events, and content extraction.
+ */
 export type ApiFormat =
   | "anthropic-messages"
   | "chatgpt-backend"
@@ -25,6 +38,12 @@ export type ApiFormat =
 
 // --- Upstream targets ---
 
+/**
+ * Base URLs for each provider's API.
+ *
+ * The proxy prepends these to the request path when forwarding.
+ * Configurable via environment variables or the ProxyConfig.
+ */
 export interface Upstreams {
   openai: string;
   anthropic: string;
@@ -35,27 +54,54 @@ export interface Upstreams {
 
 // --- Capture data (the full request/response record) ---
 
+/**
+ * A complete request/response pair captured by the proxy.
+ *
+ * Written to disk as JSON by the logger plugin. Contains everything
+ * needed to inspect, replay, or analyze an API call.
+ */
 export interface CaptureData {
+  /** ISO-8601 timestamp when the request was received. */
   timestamp: string;
+  /** Session ID from the URL path, or null if not tagged. */
   sessionId: string | null;
+  /** HTTP method (always "POST" for LLM API calls). */
   method: string;
+  /** Cleaned URL path (source tag stripped). */
   path: string;
+  /** Source tool name extracted from the URL path (e.g. "claude", "gemini"). */
   source: string | null;
+  /** Detected LLM provider. */
   provider: string;
+  /** Detected API wire format. */
   apiFormat: string;
+  /** The upstream URL the request was forwarded to. */
   targetUrl: string;
+  /** Request headers with sensitive values (auth, API keys) stripped. */
   requestHeaders: Record<string, string>;
+  /** Parsed JSON request body, or null if non-JSON. */
   requestBody: Record<string, any> | null;
+  /** Size of the raw request body in bytes. */
   requestBytes: number;
+  /** HTTP status code from the upstream. */
   responseStatus: number;
+  /** Response headers with sensitive values stripped. */
   responseHeaders: Record<string, string>;
+  /** Raw response body (SSE text for streaming, JSON string for non-streaming). */
   responseBody: string;
+  /** Whether the upstream returned a streaming (SSE) response. */
   responseIsStreaming: boolean;
+  /** Size of the raw response body in bytes. */
   responseBytes: number;
+  /** Timing breakdown for the request lifecycle. */
   timings: {
+    /** Time from receiving the request to finishing the upstream send. */
     send_ms: number;
+    /** Time from send complete to first response byte (TTFB). */
     wait_ms: number;
+    /** Time from first byte to last byte of the response. */
     receive_ms: number;
+    /** Total wall-clock time. */
     total_ms: number;
   };
 }

@@ -1,10 +1,13 @@
 /**
- * Output security scanning - scan model responses for suspicious content.
+ * Output security scanning for model responses.
  *
- * This module provides regex-based scanning for:
- * - Banned substrings (jailbreak outputs, test patterns)
- * - Custom regex patterns
- * - URL extraction and basic domain checking
+ * Scans LLM output for:
+ * - Jailbreak indicators (DAN mode markers, EICAR test strings)
+ * - Dangerous code patterns (eval+atob, child_process, fs writes to /etc/)
+ * - Suspicious URLs (known malicious domains)
+ * - Custom regex patterns (user-configurable)
+ *
+ * Each scanner can run independently or combined via `scanOutput()`.
  *
  * Zero external dependencies.
  */
@@ -13,19 +16,27 @@
 // Types
 // ----------------------------------------------------------------------------
 
+/** A single finding from output scanning. */
 export interface OutputAlert {
+  /** Index of the matched rule or pattern within its scanner. */
   index: number;
   severity: "high" | "medium" | "low";
+  /** Scanner-specific pattern identifier (e.g. "ban_substring", "shell_exec"). */
   pattern: string;
+  /** The matched text, truncated to ~120 chars. */
   match: string;
+  /** Character offset in the scanned text. */
   offset: number;
+  /** Length of the matched region. */
   length: number;
 }
 
+/** Result from any output scanner. */
 export interface OutputScanResult {
+  /** True if no alerts were found. */
   isSafe: boolean;
   alerts: OutputAlert[];
-  /** Redacted output if redaction was enabled */
+  /** The input text with matches replaced by "[REDACTED]", if redaction was enabled. */
   redactedOutput?: string;
 }
 
@@ -34,8 +45,11 @@ export interface OutputScanResult {
 // ----------------------------------------------------------------------------
 
 /**
- * Predefined list of banned substrings for output scanning.
- * Includes jailbreak outputs and test patterns for malware/phishing detection.
+ * Substrings that indicate a compromised or jailbroken model response.
+ *
+ * Includes DAN/jailbreak output markers, the EICAR antivirus test string,
+ * GTUBE anti-spam test, GTPHISH anti-phishing test, and markdown image
+ * injection (`![http`) which can exfiltrate data via image URLs.
  */
 export const OUTPUT_BAN_SUBSTRINGS = [
   // Jailbreak outputs
@@ -61,7 +75,9 @@ export const OUTPUT_BAN_SUBSTRINGS = [
 // ----------------------------------------------------------------------------
 
 /**
- * Patterns that indicate potentially dangerous code execution.
+ * Patterns for dangerous code that a model might be tricked into generating:
+ * shell execution via eval/atob, direct child_process spawning, writes to
+ * sensitive system files, and network exfiltration to suspicious endpoints.
  */
 const DANGEROUS_CODE_PATTERNS = [
   // Shell execution
@@ -86,13 +102,12 @@ const DANGEROUS_CODE_PATTERNS = [
 // URL patterns
 // ----------------------------------------------------------------------------
 
-/**
- * Regex to extract URLs from text.
- */
+/** Regex to extract HTTP(S) URLs from plain text. */
 const URL_PATTERN = /https?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+/g;
 
 /**
- * Known malicious domains (simplified blocklist - would need to be maintained).
+ * Placeholder blocklist for suspicious domains. In production this would
+ * be a maintained feed; these are test/example domains.
  */
 const SUSPICIOUS_DOMAINS = [
   "evil.com",
@@ -159,14 +174,13 @@ export function scanBanSubstrings(
 }
 
 /**
- * Scan text with custom regex patterns.
+ * Scan text against a list of custom regex patterns.
  *
- * @param text - The text to scan
- * @param patterns - List of regex patterns to match
- * @param patterns - List of regex patterns to match
- * @param isBlocked - If true, matches are blocked; if false, non-matches are blocked
- * @param redact - If true, replace matches with [REDACTED]
- * @returns Scan result
+ * @param text - The text to scan.
+ * @param patterns - Regex pattern strings (compiled with "gi" flags).
+ * @param isBlocked - If true, matches trigger alerts. If false, absence of matches triggers alerts.
+ * @param redact - If true, replace matched text with "[REDACTED]" in the output.
+ * @returns Scan result with alerts and optionally redacted text.
  */
 export function scanRegex(
   text: string,
@@ -307,11 +321,14 @@ export function scanDangerousCode(text: string): OutputScanResult {
 }
 
 /**
- * Combined output scanner - runs all scanners.
+ * Run all output scanners on a piece of text.
  *
- * @param text - The text to scan
- * @param options - Configuration options
- * @returns Combined scan result
+ * By default, runs banned substring checks, URL scanning, and dangerous
+ * code detection. Custom regex patterns and redaction are opt-in.
+ *
+ * @param text - The text to scan.
+ * @param options - Override default behavior: custom ban lists, regex patterns, toggle scanners.
+ * @returns Combined result from all enabled scanners.
  */
 export function scanOutput(
   text: string,

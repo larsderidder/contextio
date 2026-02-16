@@ -1,13 +1,15 @@
 /**
- * Header redaction for the proxy.
+ * Header filtering for captures.
  *
- * The proxy captures headers for debugging but must never persist secrets.
- * This is the single source of truth for what gets stripped.
- *
- * Extracted from context-lens src/proxy/headers.ts.
+ * The proxy logs headers for debugging but must never persist secrets
+ * like API keys or auth tokens. This module is the single source of
+ * truth for which headers get stripped before writing to disk.
  */
 
-/** Case-insensitive set of header names that must never be persisted. */
+/**
+ * Header names (lowercase) that must never be written to capture files.
+ * Checked case-insensitively by `selectHeaders()`.
+ */
 export const SENSITIVE_HEADERS = new Set([
   "authorization",
   "x-api-key",
@@ -23,10 +25,11 @@ export const SENSITIVE_HEADERS = new Set([
 ]);
 
 /**
- * Select a safe subset of headers for capture.
+ * Return a copy of `headers` with sensitive entries removed.
  *
- * Drops sensitive headers and keeps only string-valued entries
- * (Node can represent multi-valued headers as arrays).
+ * Also filters out non-string values; Node's `IncomingHttpHeaders`
+ * can represent multi-valued headers as `string[]`, but captures
+ * store everything as `Record<string, string>`.
  */
 export function selectHeaders(
   headers: Record<string, any>,

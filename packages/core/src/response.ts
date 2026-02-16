@@ -1,10 +1,11 @@
 /**
- * Response parsing utilities for extracting token usage from API responses.
+ * Response parsing: extract token usage, model info, and finish reasons
+ * from LLM API responses.
  *
- * Handles streaming SSE and non-streaming JSON responses from:
- * - Anthropic
+ * Handles both streaming (SSE) and non-streaming (JSON) responses from:
+ * - Anthropic (Messages API)
  * - OpenAI (Chat Completions and Responses API)
- * - Google Gemini (including Code Assist wrapper)
+ * - Google Gemini (including Code Assist wrapper with nested .response)
  */
 
 import { estimateTokens } from "./tokens.js";
@@ -182,11 +183,11 @@ export function parseResponseUsage(
 }
 
 /**
- * Parse streaming SSE chunks to extract usage.
+ * Parse streaming SSE chunks to extract usage from all three providers.
  *
- * @param chunks - SSE chunk string.
- * @param result - Result object to accumulate into.
- * @returns Updated result with parsed usage.
+ * Scans every `data: ` line for usage objects. Provider-specific events
+ * are detected by their structure (Anthropic uses `type: "message_start"`,
+ * OpenAI uses `choices` arrays, Gemini uses `usageMetadata`).
  */
 function parseStreamingUsage(
   chunks: string,
@@ -225,32 +226,33 @@ function parseStreamingUsage(
         }
       }
 
-        // OpenAI streaming: final chunk with usage
-        if (parsed.usage && parsed.choices) {
-          const u = parsed.usage as Record<string, unknown>;
-          result.inputTokens = Number(u.prompt_tokens || result.inputTokens);
-          result.outputTokens = Number(u.completion_tokens || result.outputTokens);
-        }
-        const choices = parsed.choices as Array<Record<string, unknown>> | undefined;
-        if (choices && choices[0]?.finish_reason) {
-          result.finishReasons = [String(choices[0].finish_reason)];
-        }
+      // OpenAI streaming: final chunk carries cumulative usage
+      if (parsed.usage && parsed.choices) {
+        const u = parsed.usage as Record<string, unknown>;
+        result.inputTokens = Number(u.prompt_tokens || result.inputTokens);
+        result.outputTokens = Number(u.completion_tokens || result.outputTokens);
+      }
+      const choices = parsed.choices as Array<Record<string, unknown>> | undefined;
+      if (choices && choices[0]?.finish_reason) {
+        result.finishReasons = [String(choices[0].finish_reason)];
+      }
 
-        // Gemini streaming: usageMetadata in chunks
-        if (parsed.usageMetadata) {
-          const u = parsed.usageMetadata as Record<string, unknown>;
-          result.inputTokens = Number(u.promptTokenCount || result.inputTokens);
-          result.outputTokens =
-            Number(u.candidatesTokenCount || result.outputTokens) +
-            Number(u.thoughtsTokenCount || 0);
-          result.cacheReadTokens = Number(
-            u.cachedContentTokenCount || result.cacheReadTokens,
-          );
-        }
-        const candidates = parsed.candidates as Array<Record<string, unknown>> | undefined;
-        if (candidates && candidates[0]?.finishReason) {
-          result.finishReasons = [String(candidates[0].finishReason)];
-        }
+      // Gemini streaming: usageMetadata appears in chunks
+      if (parsed.usageMetadata) {
+        const u = parsed.usageMetadata as Record<string, unknown>;
+        result.inputTokens = Number(u.promptTokenCount || result.inputTokens);
+        result.outputTokens =
+          Number(u.candidatesTokenCount || result.outputTokens) +
+          Number(u.thoughtsTokenCount || 0);
+        result.cacheReadTokens = Number(
+          u.cachedContentTokenCount || result.cacheReadTokens,
+        );
+      }
+      const candidates = parsed.candidates as Array<Record<string, unknown>> | undefined;
+      if (candidates && candidates[0]?.finishReason) {
+        result.finishReasons = [String(candidates[0].finishReason)];
+      }
+
       if (parsed.modelVersion) {
         result.model = String(parsed.modelVersion);
       }
@@ -265,14 +267,16 @@ function parseStreamingUsage(
 }
 
 /**
- * Simple token parser for streaming SSE responses.
+ * Provider-specific streaming token parser.
  *
- * This is a simpler alternative to `parseResponseUsage` for cases where
- * you have raw SSE text from an HTTP response.
+ * Unlike {@link parseResponseUsage} which auto-detects the provider
+ * from event structure, this function takes an explicit provider hint
+ * and only checks for that provider's SSE format. Useful when you
+ * already know the provider and want to skip auto-detection.
  *
  * @param body - Raw SSE response body.
- * @param provider - Provider name (anthropic, openai, gemini).
- * @returns Parsed usage or null if not found.
+ * @param provider - Provider name ("anthropic", "openai", "gemini").
+ * @returns Parsed usage, or null if no usage data was found.
  */
 export function parseStreamingTokens(
   body: string,

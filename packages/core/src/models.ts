@@ -1,8 +1,9 @@
 /**
- * Model pricing and context limits for major LLM providers.
+ * Model pricing and context limits for Anthropic, OpenAI, Google, and MiniMax.
  *
- * Keys are ordered most-specific-first because lookup uses substring matching.
- * This allows `gpt-4o-mini` to match before `gpt-4o`.
+ * Both lookup tables use substring matching, so key order matters:
+ * "gpt-4o-mini" must come before "gpt-4o" or the shorter key would
+ * match first. Keep entries most-specific-first within each provider.
  */
 
 // ----------------------------------------------------------------------------
@@ -45,16 +46,20 @@ export const CONTEXT_LIMITS: Record<string, number> = {
 };
 
 /**
- * Resolve an approximate context window size for a given model string.
+ * Resolve an approximate context window size for a model.
  *
- * @param model - Model identifier (often includes version suffixes).
+ * Uses substring matching against {@link CONTEXT_LIMITS}. Returns
+ * 128k as a fallback for unknown models (a reasonable default for
+ * most modern LLMs).
+ *
+ * @param model - Model identifier (may include version/date suffixes).
  * @returns Context limit in tokens.
  */
 export function getContextLimit(model: string): number {
   for (const [key, limit] of Object.entries(CONTEXT_LIMITS)) {
     if (model.includes(key)) return limit;
   }
-  return 128000; // default fallback
+  return 128000;
 }
 
 // ----------------------------------------------------------------------------

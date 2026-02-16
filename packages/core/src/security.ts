@@ -1,9 +1,15 @@
 /**
- * Security scanning for prompt injection and suspicious patterns.
+ * Input security scanning for prompt injection and suspicious patterns.
  *
- * This module provides regex-based scanning for:
- * - Tier 1: Known prompt injection patterns (role hijacking, jailbreak templates)
- * - Tier 2: Heuristic analysis (role confusion in tool results, suspicious Unicode)
+ * Two tiers of detection:
+ *
+ * **Tier 1 (pattern matching):** Known injection phrases like "ignore previous
+ * instructions", jailbreak templates (DAN, developer mode), and chat template
+ * tokens that should never appear in user content.
+ *
+ * **Tier 2 (heuristic):** Role confusion in tool results (AI instructions
+ * embedded in tool output), suspicious Unicode characters (zero-width,
+ * RTL overrides) that could hide content from human review.
  *
  * Zero external dependencies.
  */
@@ -14,21 +20,22 @@
 
 export type AlertSeverity = "high" | "medium" | "info";
 
+/** A single security finding from scanning input content. */
 export interface SecurityAlert {
-  /** Index for multi-part content (message index, block index) */
+  /** Message index in the conversation (0-based). */
   index: number;
-  /** Role if applicable (user, assistant, tool) */
+  /** Message role ("user", "assistant", "tool"), or null if unknown. */
   role: string | null;
-  /** Tool name if the content is from a tool */
+  /** Tool name if this alert came from tool output content. */
   toolName: string | null;
   severity: AlertSeverity;
-  /** Machine-readable pattern identifier */
+  /** Machine-readable pattern ID (matches a TIER1_PATTERNS id or "role_confusion"/"suspicious_unicode"). */
   pattern: string;
-  /** The matched text snippet (truncated to ~120 chars) */
+  /** The matched text snippet, truncated to ~120 chars. */
   match: string;
-  /** Character offset where the match starts */
+  /** Character offset where the match starts in the scanned text. */
   offset: number;
-  /** Length of the matched region */
+  /** Length of the matched region in characters. */
   length: number;
 }
 
@@ -160,7 +167,9 @@ const TIER1_PATTERNS: PatternRule[] = [
 // ----------------------------------------------------------------------------
 
 /**
- * Detect role confusion: imperative AI instructions appearing in tool results.
+ * Patterns that look like AI system instructions. When these appear in
+ * tool results, it suggests an injection attempt trying to override the
+ * model's behavior through tool output.
  */
 const ROLE_CONFUSION_PATTERNS: RegExp[] = [
   /\bas\s+an?\s+AI\b.*?\byou\s+(?:must|should|will|are)\b/i,
@@ -171,7 +180,8 @@ const ROLE_CONFUSION_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Detect unusual Unicode: zero-width characters, RTL overrides, homoglyphs.
+ * Suspicious Unicode characters that can hide content from human review:
+ * zero-width spaces/joiners, RTL overrides, invisible separators, soft hyphens.
  */
 const SUSPICIOUS_UNICODE: RegExp =
   /[\u200B-\u200F\u2028-\u202F\uFEFF\u061C\u115F\u1160\u17B4\u17B5\u180E\u2000-\u200A\u2060-\u2064\u2066-\u2069\u206A-\u206F]|\u00AD|\u034F/;
@@ -190,11 +200,14 @@ function truncateMatch(text: string, start: number, length: number): string {
 // ----------------------------------------------------------------------------
 
 /**
- * Scan a string for prompt injection patterns.
+ * Scan a single text string for prompt injection patterns.
  *
- * @param text - The text to scan
- * @param options - Scanning options
- * @returns Security result with alerts
+ * Runs both tier 1 (known phrases) and tier 2 (heuristic) checks.
+ * Tier 2 role confusion checks only run when the content role is "tool".
+ *
+ * @param text - The text to scan.
+ * @param options - Optional: role, tool name, and whether to skip system messages.
+ * @returns Alerts found, plus a severity summary.
  */
 export function scanSecurity(
   text: string,
@@ -286,12 +299,14 @@ export function scanSecurity(
 }
 
 /**
- * Scan request messages for prompt injection.
+ * Scan a conversation's messages for prompt injection.
  *
- * Extracts and scans user messages and tool results from the request body.
+ * Iterates over the message array, skipping system/developer messages
+ * (those are trusted). Extracts text from various content formats
+ * (Anthropic content blocks, Gemini parts, plain strings) and scans each.
  *
- * @param messages - Array of messages from the request
- * @returns Security result
+ * @param messages - Message array from the request body.
+ * @returns Combined alerts from all scanned messages, with per-message indices.
  */
 export function scanRequestMessages(
   messages: Array<{
