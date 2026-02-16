@@ -1,12 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { createStats, redactValue, redactWithPolicy } from "../src/redact.js";
-import { PRESETS } from "../src/presets.js";
-import { compilePolicy, fromPreset } from "../src/policy.js";
-import { ReplacementMap } from "../src/mapping.js";
-import { createStreamRehydrator } from "../src/stream.js";
-import type { RedactionRule } from "../src/rules.js";
+import { createStats, redactValue, redactWithPolicy } from "../dist/redact.js";
+import { PRESETS } from "../dist/presets.js";
+import { compilePolicy, fromPreset } from "../dist/policy.js";
+import { ReplacementMap } from "../dist/mapping.js";
+import { createStreamRehydrator } from "../dist/stream.js";
+import type { RedactionRule } from "../dist/rules.js";
 
 // --- Legacy API tests (redactValue) ---
 
