@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contextio.dev/schemas/redaction-policy.json",
+  "title": "ContextIO Redaction Policy",
+  "description": "Redaction policy for ContextIO - controls what PII/secrets are redacted from LLM API requests",
+  "type": "object",
+  "properties": {
+    "extends": {
+      "type": "string",
+      "enum": ["secrets", "pii", "strict"],
+      "description": "Inherit rules from a built-in preset. Custom rules are appended after preset rules."
+    },
+    "rules": {
+      "type": "array",
+      "description": "Custom redaction rules",
+      "items": {
+        "$ref": "#/definitions/Rule"
+      }
+    },
+    "allowlist": {
+      "$ref": "#/definitions/Allowlist",
+      "description": "Values that should never be redacted"
+    },
+    "paths": {
+      "$ref": "#/definitions/Paths",
+      "description": "Scope redaction to specific JSON paths"
+    }
+  },
+  "definitions": {
+    "Rule": {
+      "type": "object",
+      "required": ["id", "pattern", "replacement"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this rule. Used in logging and numbered placeholders."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression pattern. Double-escape backslashes in JSON (e.g., \\\\d instead of \\\\d). Compiled with global flag."
+        },
+        "replacement": {
+          "type": "string",
+          "description": "Replacement text. Supports $1, $2 for capture groups."
+        },
+        "context": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Context words. If set, rule only fires when at least one context word appears within contextWindow characters of the match."
+        },
+        "contextWindow": {
+          "type": "number",
+          "minimum": 1,
+          "default": 100,
+          "description": "Character radius to search for context words. Default: 100."
+        }
+      }
+    },
+    "Allowlist": {
+      "type": "object",
+      "properties": {
+        "strings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Exact strings to never redact."
+        },
+        "patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns for strings that should never be redacted."
+        }
+      }
+    },
+    "Paths": {
+      "type": "object",
+      "properties": {
+        "only": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "If set, only redact values at these JSON paths. Everything else is left untouched."
+        },
+        "skip": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Skip redaction at these JSON paths. Checked before 'only'."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "extends": "secrets"
+    },
+    {
+      "extends": "pii",
+      "rules": [
+        {
+          "id": "employee-id",
+          "pattern": "EMP-\\\\d{5,}",
+          "replacement": "[EMPLOYEE_ID]"
+        }
+      ],
+      "allowlist": {
+        "strings": ["support@company.com"]
+      },
+      "paths": {
+        "only": ["messages[*].content"],
+        "skip": ["model"]
+      }
+    }
+  ]
+}
