@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - name: Verify all packages build correctly
+        run: |
+          for pkg in packages/*; do
+            [ -d "$pkg/dist" ] || { echo "ERROR: $pkg/dist missing"; exit 1; }
+            [ -f "$pkg/dist/index.js" ] || { echo "ERROR: $pkg/dist/index.js missing in $pkg"; exit 1; }
+          done
+          echo "All packages built successfully"
+      - name: Verify CLI package is complete
+        run: |
+          npm pack packages/cli --dry-run 2>&1 | grep -q 'dist/main.js' || { echo "ERROR: CLI dist/main.js missing from tarball"; exit 1; }
+          npm pack packages/cli --dry-run 2>&1 | grep -q 'mitm_addon.py' || { echo "ERROR: mitm_addon.py missing from tarball"; exit 1; }
+          echo "CLI package verified"
