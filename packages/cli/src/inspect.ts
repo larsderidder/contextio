@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { join } from "node:path";
 
-import type { CaptureData } from "@contextio/core";
+import { estimateTokens, type CaptureData } from "@contextio/core";
 
 import type { InspectArgs } from "./args.js";
 import { captureDir, listCaptureFiles, readCapture } from "./captures.js";
@@ -198,10 +198,6 @@ function getFirstUserMessage(capture: CaptureData): string | null {
   return null;
 }
 
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 3) + "...";
@@ -252,6 +248,52 @@ function printContextOverhead(system: string | null, tools: ToolDefinition[], fi
   }
 }
 
+function listSessions(args: InspectArgs): void {
+  const dir = captureDir();
+  const files = listCaptureFiles(dir);
+
+  // Group by session
+  const sessions = new Map<string, { source: string; provider: string; count: number; firstTime: string; lastTime: string }>();
+
+  for (const file of files) {
+    const capture = readCapture(join(dir, file));
+    if (!capture || !capture.sessionId) continue;
+    if (args.source && capture.source !== args.source) continue;
+
+    const existing = sessions.get(capture.sessionId);
+    if (existing) {
+      existing.count++;
+      existing.lastTime = capture.timestamp;
+    } else {
+      sessions.set(capture.sessionId, {
+        source: capture.source || "?",
+        provider: capture.provider || "?",
+        count: 1,
+        firstTime: capture.timestamp,
+        lastTime: capture.timestamp,
+      });
+    }
+  }
+
+  if (sessions.size === 0) {
+    if (args.source) {
+      console.log(`No sessions found for source: ${args.source}`);
+    } else {
+      console.log("No sessions found. Run some LLM traffic first.");
+    }
+    process.exit(1);
+  }
+
+  console.log(" SESSION     SOURCE      PROVIDER    REQUESTS  TIME");
+  for (const [id, info] of sessions) {
+    const time = new Date(info.firstTime).toLocaleString();
+    console.log(
+      ` ${id.padEnd(10)}  ${info.source.padEnd(10)}  ${info.provider.padEnd(10)}  ${String(info.count).padEnd(8)}  ${time}`,
+    );
+  }
+  console.log(`\nUse 'ctxio inspect --session <id>' to inspect a session.`);
+}
+
 export async function runInspect(args: InspectArgs): Promise<void> {
   const dir = captureDir();
 
@@ -259,6 +301,18 @@ export async function runInspect(args: InspectArgs): Promise<void> {
     console.log(`Capture directory not found: ${dir}`);
     console.log("Run some LLM traffic first (e.g., ctxio proxy -- claude)");
     process.exit(1);
+  }
+
+  // No session specified: list all sessions
+  if (!args.session && !args.last && !args.source) {
+    listSessions(args);
+    return;
+  }
+
+  // Source without --last or --session: list sessions for that source
+  if (args.source && !args.last && !args.session) {
+    listSessions(args);
+    return;
   }
 
   const files = findSessionFiles(args);

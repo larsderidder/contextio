@@ -1,12 +1,10 @@
 import fs from "node:fs";
 import { join } from "node:path";
 
-import type { CaptureData } from "@contextio/core";
+import { estimateCost, parseResponseUsage, type CaptureData } from "@contextio/core";
 
 import type { MonitorArgs } from "./args.js";
 import { captureDir, listCaptureFiles, readCapture } from "./captures.js";
-import { parseTokens, type TokenUsage } from "./tokens.js";
-import { estimateCost } from "./pricing.js";
 
 interface CaptureDisplay {
   time: string;
@@ -61,18 +59,20 @@ function loadCaptureDisplay(filepath: string): CaptureDisplay | null {
   const capture = readCapture(filepath);
   if (!capture) return null;
 
-  const tokens: TokenUsage | null = parseTokens(
-    capture.responseBody,
-    capture.provider,
-    capture.apiFormat,
-  );
+  // Parse usage from response body
+  const usage = parseResponseUsage(capture.responseBody);
 
   const model = parseModelName(capture);
   const latencyMs = capture.timings?.total_ms ?? 0;
 
-  const cost = tokens
-    ? estimateCost(model, tokens.inputTokens, tokens.outputTokens)
-    : null;
+  // Estimate cost - use cache tokens if available
+  const cost = estimateCost(
+    model,
+    usage.inputTokens,
+    usage.outputTokens,
+    usage.cacheReadTokens,
+    usage.cacheWriteTokens,
+  );
 
   return {
     time: formatTime(capture.timestamp),
@@ -80,8 +80,8 @@ function loadCaptureDisplay(filepath: string): CaptureDisplay | null {
     model,
     status: capture.responseStatus,
     latency: formatLatency(latencyMs),
-    tokensIn: tokens?.inputTokens ?? 0,
-    tokensOut: tokens?.outputTokens ?? 0,
+    tokensIn: usage.inputTokens,
+    tokensOut: usage.outputTokens,
     cost: formatCost(cost),
     sessionId: capture.sessionId,
   };
@@ -164,30 +164,37 @@ export async function runMonitor(args: MonitorArgs): Promise<void> {
     process.exit(1);
   }
 
-  const existingFiles = listExistingCaptures(args);
-  const displays: CaptureDisplay[] = [];
-
-  for (const filepath of existingFiles) {
-    const display = loadCaptureDisplay(filepath);
-    if (display && matchesFilter(display, args)) {
-      displays.push(display);
-    }
-  }
-
   const header = " TIME      SOURCE      MODEL             STATUS  LATENCY  TOKENS (in/out)  COST";
   console.log(header);
 
-  for (const display of displays) {
-    console.log(formatDisplayRow(display));
+  // Only show existing captures for --last or --session mode.
+  // Without those flags, just watch for new ones.
+  const displays: CaptureDisplay[] = [];
+
+  if (args.last || args.session) {
+    const existingFiles = listExistingCaptures(args);
+
+    for (const filepath of existingFiles) {
+      const display = loadCaptureDisplay(filepath);
+      if (display && matchesFilter(display, args)) {
+        displays.push(display);
+      }
+    }
+
+    for (const display of displays) {
+      console.log(formatDisplayRow(display));
+    }
+
+    if (displays.length > 0) {
+      console.log(getTotalsLine(displays));
+    }
   }
 
-  if (displays.length > 0) {
-    console.log(getTotalsLine(displays));
-  }
-
-  if (args.last) {
-    console.log("\n--last mode: showing recent captures, watching for new ones...\n");
-  } else if (!args.session && !args.last) {
+  if (args.session) {
+    console.log(`\nSession ${args.session}: ${displays.length} captures\n`);
+  } else if (args.last) {
+    console.log("\nShowing recent captures, watching for new ones...\n");
+  } else {
     console.log("\nWatching for new captures... (Ctrl-C to exit)\n");
   }
 
