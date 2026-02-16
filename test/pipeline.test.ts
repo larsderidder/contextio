@@ -561,3 +561,4 @@ describe("streaming reversible redaction", () => {
     assert.ok(!text.includes("[EMAIL_"), `got: ${text}`);
   });
 });
+

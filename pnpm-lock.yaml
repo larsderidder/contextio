@@ -48,6 +48,9 @@ importers:
       '@contextio/redact':
         specifier: workspace:*
         version: link:../redact
+      commander:
+        specifier: ^13.0.0
+        version: 13.1.0
     devDependencies:
       '@types/node':
         specifier: ^22
@@ -109,6 +112,10 @@ packages:
   '@types/node@22.19.11':
     resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
+  commander@13.1.0:
+    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
+    engines: {node: '>=18'}
+
   turbo-darwin-64@2.8.8:
     resolution: {integrity: sha512-7R/XRAleyNB8nIJuenRpS7EnmCM/kYFgcG1rW3F5DF57Nl4WyBO3DzxqwooRheuoXDD1UsJvDse0yRufgxjClA==}
     cpu: [x64]
@@ -156,6 +163,8 @@ snapshots:
   '@types/node@22.19.11':
     dependencies:
       undici-types: 6.21.0
+
+  commander@13.1.0: {}
 
   turbo-darwin-64@2.8.8:
     optional: true
