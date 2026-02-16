@@ -164,11 +164,16 @@ describe("parseArgs", () => {
     }
   });
 
-  it("monitor --session --last --source", () => {
-    const r = parse("monitor", "--session", "abc12345", "--last", "1h", "--source", "claude");
+  it("monitor with positional session", () => {
+    const r = parse("monitor", "abc12345");
+    assert.ok(!isError(r));
+    if (r.command === "monitor") assert.equal(r.session, "abc12345");
+  });
+
+  it("monitor --last --source", () => {
+    const r = parse("monitor", "--last", "1h", "--source", "claude");
     assert.ok(!isError(r));
     if (r.command === "monitor") {
-      assert.equal(r.session, "abc12345");
       assert.equal(r.last, "1h");
       assert.equal(r.source, "claude");
     }
@@ -187,8 +192,8 @@ describe("parseArgs", () => {
     }
   });
 
-  it("inspect --session", () => {
-    const r = parse("inspect", "--session", "def67890");
+  it("inspect with positional session", () => {
+    const r = parse("inspect", "def67890");
     assert.ok(!isError(r));
     if (r.command === "inspect") assert.equal(r.session, "def67890");
   });

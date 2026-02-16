@@ -184,14 +184,14 @@ export function buildProgram(
   program
     .command("monitor")
     .description("Watch for API traffic in real-time")
-    .option("--session <id>", "show captures for a specific session")
+    .argument("[session]", "session ID to watch")
     .option("--last <duration>", "show recent captures, then watch (1h, 30m, 60s)")
     .option("--source <name>", "filter by source tool (claude, codex, copilot)")
     .exitOverride()
-    .action((opts) => {
+    .action((session, opts) => {
       onResult({
         command: "monitor",
-        session: opts.session || null,
+        session: session || null,
         last: opts.last || null,
         source: opts.source || null,
       });
@@ -201,15 +201,15 @@ export function buildProgram(
   program
     .command("inspect")
     .description("List sessions or inspect prompts and tool definitions")
-    .option("--session <id>", "inspect a specific session (8 hex chars)")
+    .argument("[session]", "session ID to inspect")
     .option("--last", "inspect the most recent session")
     .option("--source <name>", "filter by tool (claude, codex, copilot)")
     .option("--full", "show full system prompt (don't truncate)")
     .exitOverride()
-    .action((opts) => {
+    .action((session, opts) => {
       onResult({
         command: "inspect",
-        session: opts.session || null,
+        session: session || null,
         last: opts.last || false,
         source: opts.source || null,
         full: opts.full || false,
