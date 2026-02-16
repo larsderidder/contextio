@@ -53,7 +53,119 @@ ctxio proxy stop
 
 `contextio` is a longer alias for `ctxio`.
 
-## Packages
+## Commands
+
+### Proxy
+
+Start the proxy standalone (runs until you Ctrl+C):
+
+```bash
+ctxio proxy [--redact] [--log-dir ./captures]
+```
+
+Wrap a tool (starts proxy, runs tool, cleans up when tool exits):
+
+```bash
+ctxio proxy [flags] -- claude
+ctxio proxy --redact -- aider
+```
+
+Background mode (detached):
+
+```bash
+ctxio proxy -d --redact       # start in background
+ctxio proxy status            # check if running
+ctxio proxy stop              # stop background proxy
+```
+
+### Attach
+
+Connect a tool to an already-running proxy:
+
+```bash
+ctxio attach <tool>
+```
+
+Works with both standalone and background proxies. Multiple tools can attach to the same proxy.
+
+### Monitor
+
+Live view of traffic passing through the proxy:
+
+```bash
+ctxio monitor              # watch all traffic
+ctxio monitor a1b2c3d4     # filter to one session ID
+```
+
+Shows request/response pairs as they arrive, with timing, token counts, and streaming status. Press Ctrl+C to exit.
+
+### Inspect
+
+Analyze captured sessions:
+
+```bash
+ctxio inspect                    # list all sessions
+ctxio inspect a1b2c3d4           # show session details
+ctxio inspect a1b2c3d4 --stats   # token stats per request
+```
+
+Displays:
+- Session summary (tool, provider, request count, token usage)
+- System prompts and tool definitions (if present)
+- First user message
+- Token consumption breakdown
+
+### Replay
+
+Re-send a captured request to the API (experimental):
+
+```bash
+ctxio replay capture-file.json
+```
+
+Requires the correct API key for the provider. Shows the new response and highlights any differences from the original.
+
+### Export
+
+Bundle session captures into a shareable tarball (experimental):
+
+```bash
+ctxio export                  # export all sessions
+ctxio export a1b2c3d4         # export one session
+ctxio export --redact         # strip PII before bundling
+```
+
+Creates `contextio-export-YYYY-MM-DD-HHMMSS.tar.gz` with all matching capture files.
+
+### Doctor
+
+Check environment and configuration:
+
+```bash
+ctxio doctor
+```
+
+Verifies:
+- mitmproxy installation and CA cert
+- Capture directory permissions
+- Port availability (4040, 8080)
+- Lockfile state
+- Background proxy status
+
+## Architecture
+
+```
+Tool  ─HTTP─▶  Proxy (:4040)  ─HTTPS─▶  api.anthropic.com / api.openai.com
+                  │
+            plugin pipeline
+            (redact → log)
+                  │
+            capture files on disk
+```
+
+The proxy has zero npm dependencies (Node.js built-ins + `@contextio/core` only). Plugins like redact and logger are separate packages that hook into the proxy's request/response lifecycle.
+
+### Packages
 
 | Package | Description |
 |:---|:---|
@@ -177,36 +289,6 @@ claude_a1b2c3d4_1739000000000-000001.json
 ```
 
 Actual files include headers, byte counts, and detailed timings.
-
-## Commands
-
-```bash
-ctxio proxy [flags]                  # start proxy (standalone)
-ctxio proxy [flags] -- <tool>        # wrap a tool with the proxy
-ctxio proxy -d [flags]               # start proxy in background (detached)
-ctxio proxy stop                     # stop background proxy
-ctxio proxy status                   # check background proxy status
-ctxio attach <tool>                  # connect a tool to a running proxy
-ctxio monitor [session]              # live view of proxy traffic
-ctxio inspect [session]              # inspect session prompts and tool definitions
-ctxio replay <capture-file>          # experimental: re-send a captured request to the API
-ctxio export [session]               # experimental: bundle session captures into a shareable file
-ctxio doctor                         # check ports, certs, capture dir
-ctxio --help
-```
-
-## Architecture
-
-```
-Tool  ─HTTP─▶  Proxy (:4040)  ─HTTPS─▶  api.anthropic.com / api.openai.com
-                  │
-            plugin pipeline
-            (redact → log)
-                  │
-            capture files on disk
-```
-
-The proxy has zero npm dependencies (Node.js built-ins + `@contextio/core` only). Plugins like redact and logger are separate packages that hook into the proxy's request/response lifecycle.
 
 ## Development
 
