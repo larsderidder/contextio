@@ -14,9 +14,20 @@ All your stuff passes through this thing, so the proxy has zero external depende
 
 ## Install
 
+### CLI (recommended for local development)
+
 ```bash
 npm install -g @contextio/cli
 ```
+
+### Docker (for deployment)
+
+```bash
+docker pull ghcr.io/larsderidder/contextio:latest
+docker run -p 4040:4040 ghcr.io/larsderidder/contextio:latest
+```
+
+See [docker/README.md](docker/README.md) for full Docker documentation.
 
 ## Quick start
 
