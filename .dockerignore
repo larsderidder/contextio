@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.turbo
+.aider*
+node_modules
+dist
+dist-test
+**/node_modules
+**/dist
+**/dist-test
+coverage
+docs
+examples
+test
+*.log
