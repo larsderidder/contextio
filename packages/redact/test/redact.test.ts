@@ -134,6 +134,213 @@ describe("presets", () => {
     const result = redactWithPolicy("server at 192.168.1.100", policy, stats);
     assert.equal(result, "server at [IP_REDACTED]");
   });
+
+  it("pii preset catches IBAN with context word", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My bank account IBAN is NL91 ABNA 0417 1643 00",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[IBAN_REDACTED]"));
+    assert.equal(stats.byRule["iban"], 1);
+  });
+
+  it("pii preset catches IBAN without spaces", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Transfer to IBAN: DE89370400440532013000 please",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[IBAN_REDACTED]"));
+  });
+
+  it("pii preset does not redact IBAN without context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "The code NL91ABNA0417164300 is a reference",
+      policy,
+      stats,
+    );
+    assert.ok(!(result as string).includes("[IBAN_REDACTED]"));
+    assert.equal(stats.byRule["iban"] ?? 0, 0);
+  });
+
+  it("pii preset catches EU phone numbers with context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My mobile number is +31 6 12345678",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PHONE_REDACTED]"));
+    assert.ok(stats.byRule["phone-eu"] >= 1);
+  });
+
+  it("pii preset catches UK phone number with context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Call me at +44 20 7946 0958",
+      policy,
+    stats,
+    );
+    assert.ok((result as string).includes("[PHONE_REDACTED]"));
+  });
+
+  it("pii preset catches German phone number with context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Phone: +49 170 1234567",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PHONE_REDACTED]"));
+  });
+
+  it("pii preset catches French phone number with context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Call me at +33 6 12 34 56 78",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PHONE_REDACTED]"));
+  });
+
+  it("pii preset catches Italian phone number with context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My mobile is +39 347 1234567",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PHONE_REDACTED]"));
+  });
+
+  it("pii preset does not redact EU phone without context", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "The product code is +31-612-345-678",
+      policy,
+      stats,
+    );
+    assert.ok(!(result as string).includes("[PHONE_REDACTED]"));
+  });
+
+  it("strict preset catches Dutch BSN with context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My BSN is 123456782",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[BSN_REDACTED]"));
+    assert.equal(stats.byRule["bsn-dutch"], 1);
+  });
+
+  it("strict preset catches BSN with 'burgerservicenummer' context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Burgerservicenummer: 123456782",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[BSN_REDACTED]"));
+  });
+
+  it("strict preset does not redact BSN without context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Order reference: 123456782",
+      policy,
+      stats,
+    );
+    assert.ok(!(result as string).includes("[BSN_REDACTED]"));
+    assert.equal(stats.byRule["bsn-dutch"] ?? 0, 0);
+  });
+
+  it("strict preset catches UK NI number with context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My NI number is AB 12 34 56 C",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[NI_NUMBER_REDACTED]"));
+    assert.equal(stats.byRule["ni-number-uk"], 1);
+  });
+
+  it("strict preset catches UK NI number without spaces", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "National Insurance: AB123456C",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[NI_NUMBER_REDACTED]"));
+  });
+
+  it("strict preset does not redact NI number without context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "The code AB123456C is invalid",
+      policy,
+      stats,
+    );
+    assert.ok(!(result as string).includes("[NI_NUMBER_REDACTED]"));
+    assert.equal(stats.byRule["ni-number-uk"] ?? 0, 0);
+  });
+
+  it("strict preset catches passport number with context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "My passport number is X12345678",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PASSPORT_REDACTED]"));
+    assert.equal(stats.byRule["passport-number"], 1);
+  });
+
+  it("strict preset catches passport number with 'paspoort' context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "Paspoort: AB987654",
+      policy,
+      stats,
+    );
+    assert.ok((result as string).includes("[PASSPORT_REDACTED]"));
+  });
+
+  it("strict preset does not redact passport-like strings without context", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const result = redactWithPolicy(
+      "The product code X12345678 is discontinued",
+      policy,
+      stats,
+    );
+    assert.ok(!(result as string).includes("[PASSPORT_REDACTED]"));
+    assert.equal(stats.byRule["passport-number"] ?? 0, 0);
+  });
 });
 
 describe("context words", () => {
@@ -448,6 +655,71 @@ describe("reversible redaction", () => {
     const responseBody = '{"content": "Noted, [EMAIL_1] is your email."}';
     const restored = map.rehydrate(responseBody);
     assert.equal(restored, '{"content": "Noted, john@test.com is your email."}');
+  });
+
+  it("round-trips IBAN with reversible redaction", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const map = new ReplacementMap();
+
+    const original = "My IBAN is NL91 ABNA 0417 1643 00 for transfers";
+    const redacted = redactWithPolicy(original, policy, stats, [], map) as string;
+
+    assert.ok(redacted.includes("[IBAN_1]"));
+    const restored = map.rehydrate(redacted);
+    assert.equal(restored, original);
+  });
+
+  it("round-trips EU phone number with reversible redaction", () => {
+    const policy = fromPreset("pii");
+    const stats = createStats();
+    const map = new ReplacementMap();
+
+    const original = "Call +31 6 12345678 for info";
+    const redacted = redactWithPolicy(original, policy, stats, [], map) as string;
+
+    assert.ok(redacted.includes("[PHONE_EU_1]"));
+    const restored = map.rehydrate(redacted);
+    assert.equal(restored, original);
+  });
+
+  it("round-trips BSN with reversible redaction in strict preset", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const map = new ReplacementMap();
+
+    const original = "BSN: 123456782";
+    const redacted = redactWithPolicy(original, policy, stats, [], map) as string;
+
+    assert.ok(redacted.includes("[BSN_DUTCH_1]"));
+    const restored = map.rehydrate(redacted);
+    assert.equal(restored, original);
+  });
+
+  it("round-trips UK NI number with reversible redaction", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const map = new ReplacementMap();
+
+    const original = "My NI number is AB123456C";
+    const redacted = redactWithPolicy(original, policy, stats, [], map) as string;
+
+    assert.ok(redacted.includes("[NI_NUMBER_UK_1]"));
+    const restored = map.rehydrate(redacted);
+    assert.equal(restored, original);
+  });
+
+  it("round-trips passport number with reversible redaction", () => {
+    const policy = fromPreset("strict");
+    const stats = createStats();
+    const map = new ReplacementMap();
+
+    const original = "Passport number: X12345678";
+    const redacted = redactWithPolicy(original, policy, stats, [], map) as string;
+
+    assert.ok(redacted.includes("[PASSPORT_NUMBER_1]"));
+    const restored = map.rehydrate(redacted);
+    assert.equal(restored, original);
   });
 });
 

@@ -115,10 +115,45 @@ const PII_RULES: RedactionRule[] = [
     ],
     contextWindow: 200,
   },
+  {
+    name: "phone-eu",
+    pattern:
+      /\+(?:31|32|33|34|39|41|43|44|45|46|47|48|49)[\s\-\.]?(?:\d[\s\-\.]?){8,11}\b/g,
+    replacement: "[PHONE_REDACTED]",
+    context: [
+      "phone",
+      "call",
+      "mobile",
+      "cell",
+      "tel",
+      "contact",
+      "reach",
+      "number",
+    ],
+    contextWindow: 200,
+  },
+  {
+    name: "iban",
+    pattern:
+      /\b[A-Z]{2}\d{2}(?:[\s]?[A-Z0-9]){11,26}\b/g,
+    replacement: "[IBAN_REDACTED]",
+    context: [
+      "iban",
+      "bank",
+      "account",
+      "rekening",
+      "compte",
+      "konto",
+      "transfer",
+      "payment",
+    ],
+    contextWindow: 200,
+  },
 ];
 
 // ---- Strict preset ----
-// Everything above plus IP addresses, URLs, and dates near PII context.
+// Everything above plus IP addresses, URLs, dates near PII context,
+// and international PII patterns with higher false-positive risk.
 
 const STRICT_RULES: RedactionRule[] = [
   {
@@ -147,6 +182,54 @@ const STRICT_RULES: RedactionRule[] = [
       "age",
     ],
     contextWindow: 200,
+  },
+  {
+    name: "bsn-dutch",
+    pattern: /\b\d{9}\b/g,
+    replacement: "[BSN_REDACTED]",
+    context: [
+      "bsn",
+      "burgerservicenummer",
+      "sofinummer",
+      "sofi",
+      "burgerservice",
+      "citizen service number",
+      "dutch",
+      "netherlands",
+      "nederland",
+    ],
+    contextWindow: 200,
+  },
+  {
+    name: "ni-number-uk",
+    pattern: /\b[A-CEGHJ-PR-TW-Z]{2}[\s]?\d{2}[\s]?\d{2}[\s]?\d{2}[\s]?[A-D\s]\b/g,
+    replacement: "[NI_NUMBER_REDACTED]",
+    context: [
+      "ni number",
+      "national insurance",
+      "nino",
+      "ni-nummer",
+      "uk",
+      "british",
+      "united kingdom",
+    ],
+    contextWindow: 200,
+  },
+  {
+    name: "passport-number",
+    pattern: /\b[A-Z]{1,2}\d{6,9}\b/g,
+    replacement: "[PASSPORT_REDACTED]",
+    context: [
+      "passport",
+      "paspoort",
+      "passeport",
+      "reisepass",
+      "travel document",
+      "passport number",
+      "passport nr",
+      "passport#",
+    ],
+    contextWindow: 100,
   },
 ];
 
