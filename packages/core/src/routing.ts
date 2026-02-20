@@ -63,6 +63,13 @@ export function classifyRequest(
   if (headers["anthropic-version"])
     return { provider: "anthropic", apiFormat: "unknown" };
 
+  // Vertex AI: must come before Gemini (Vertex paths also contain :generateContent)
+  const isVertexPath = pathname.match(
+    /\/v1[^/]*\/projects\/[^/]+\/locations\/[^/]+\/publishers\/google\/models\//,
+  );
+  if (isVertexPath)
+    return { provider: "vertex", apiFormat: "gemini" };
+
   // Gemini (checked before OpenAI because both use /models/ paths)
   const isGeminiPath =
     pathname.includes(":generateContent") ||
@@ -153,7 +160,7 @@ export function resolveTargetUrl(
   headers: Record<string, string | undefined>,
   upstreams: Upstreams,
 ): ResolveTargetResult {
-  const provider = classifyRequest(pathname, headers).provider;
+  const { provider, apiFormat } = classifyRequest(pathname, headers);
   const qs = search || "";
   let targetUrl = headers["x-target-url"];
   if (!targetUrl) {
@@ -167,11 +174,19 @@ export function resolveTargetUrl(
         (isCodeAssist ? upstreams.geminiCodeAssist : upstreams.gemini) +
         pathname +
         qs;
+    } else if (provider === "vertex") {
+      const locMatch = pathname.match(/\/locations\/([^/]+)\//);
+      const location = locMatch?.[1];
+      if (location && location !== "global") {
+        targetUrl = `https://${location}-aiplatform.googleapis.com${pathname}${qs}`;
+      } else {
+        targetUrl = upstreams.vertex + pathname + qs;
+      }
     } else {
       targetUrl = upstreams.openai + pathname + qs;
     }
   } else if (!targetUrl.startsWith("http")) {
     targetUrl = targetUrl + pathname + qs;
   }
-  return { targetUrl, provider };
+  return { targetUrl, provider, apiFormat };
 }

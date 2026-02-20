@@ -43,6 +43,9 @@ export function resolveConfig(
     geminiCodeAssist:
       process.env.UPSTREAM_GEMINI_CODE_ASSIST_URL ||
       "https://cloudcode-pa.googleapis.com",
+    vertex:
+      process.env.UPSTREAM_VERTEX_URL ||
+      "https://us-central1-aiplatform.googleapis.com",
   };
 
   const bindHost =

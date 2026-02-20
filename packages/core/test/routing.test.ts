@@ -14,6 +14,7 @@ const mockUpstreams: Upstreams = {
   gemini: "https://generativelanguage.googleapis.com",
   geminiCodeAssist: "https://cloudcode-assist.googleusercontent.com",
   chatgpt: "https://chatgpt.com/backend-api",
+  vertex: "https://us-central1-aiplatform.googleapis.com",
 };
 
 describe("classifyRequest", () => {
@@ -121,6 +122,24 @@ describe("classifyRequest", () => {
       authorization: "Bearer sk-test",
     });
     assert.equal(result.provider, "gemini");
+  });
+
+  it("classifies Vertex AI path as vertex with gemini apiFormat", () => {
+    const result = classifyRequest(
+      "/v1/projects/my-project/locations/us-central1/publishers/google/models/gemini-pro:generateContent",
+      {},
+    );
+    assert.equal(result.provider, "vertex");
+    assert.equal(result.apiFormat, "gemini");
+  });
+
+  it("prefers Vertex over Gemini when path contains Vertex project structure", () => {
+    // Vertex paths also contain :generateContent, Vertex must win
+    const result = classifyRequest(
+      "/v1/projects/my-project/locations/europe-west4/publishers/google/models/gemini-1.5-pro:streamGenerateContent",
+      {},
+    );
+    assert.equal(result.provider, "vertex");
   });
 });
 
@@ -309,6 +328,29 @@ describe("resolveTargetUrl", () => {
     assert.equal(
       result.targetUrl,
       "https://chatgpt.com/backend-api/api/test",
+    );
+  });
+
+  it("resolves Vertex regional path to per-location aiplatform URL", () => {
+    const path =
+      "/v1/projects/my-project/locations/europe-west4/publishers/google/models/gemini-pro:generateContent";
+    const result = resolveTargetUrl(path, "", {}, mockUpstreams);
+    assert.equal(result.provider, "vertex");
+    assert.equal(result.apiFormat, "gemini");
+    assert.equal(
+      result.targetUrl,
+      `https://europe-west4-aiplatform.googleapis.com${path}`,
+    );
+  });
+
+  it("resolves Vertex global location path to configured upstream", () => {
+    const path =
+      "/v1/projects/my-project/locations/global/publishers/google/models/gemini-pro:generateContent";
+    const result = resolveTargetUrl(path, "", {}, mockUpstreams);
+    assert.equal(result.provider, "vertex");
+    assert.equal(
+      result.targetUrl,
+      `https://us-central1-aiplatform.googleapis.com${path}`,
     );
   });
 

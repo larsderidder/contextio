@@ -19,6 +19,7 @@ export type Provider =
   | "openai"
   | "chatgpt"
   | "gemini"
+  | "vertex"
   | "unknown";
 
 /**
@@ -56,6 +57,7 @@ export interface Upstreams {
   chatgpt: string;
   gemini: string;
   geminiCodeAssist: string;
+  vertex: string;
 }
 
 // --- Capture data (the full request/response record) ---
@@ -210,4 +212,5 @@ export interface ExtractSourceResult {
 export interface ResolveTargetResult {
   targetUrl: string;
   provider: Provider;
+  apiFormat: ApiFormat;
 }

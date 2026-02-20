@@ -22,7 +22,6 @@ import url from "node:url";
 import zlib from "node:zlib";
 
 import {
-  classifyRequest,
   extractSource,
   resolveTargetUrl,
   selectHeaders,
@@ -315,13 +314,12 @@ export function createProxyHandler(
       req.socket.remoteAddress,
       opts.allowTargetOverride,
     );
-    const { targetUrl, provider } = resolveTargetUrl(
+    const { targetUrl, provider, apiFormat } = resolveTargetUrl(
       cleanPath,
       search,
       routingHeaders,
       opts.upstreams,
     );
-    const { apiFormat } = classifyRequest(cleanPath, routingHeaders);
 
     if (opts.logTraffic) {
       const hasAuth = !!req.headers.authorization;
