@@ -34,6 +34,13 @@ jobs:
           for pkg in packages/core packages/logger packages/proxy packages/redact packages/cli; do
             echo "=== Publishing $pkg ==="
             cd "$pkg"
+            PKG_NAME=$(node -p "require('./package.json').name")
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            if npm show "${PKG_NAME}@${PKG_VERSION}" version 2>/dev/null | grep -q "${PKG_VERSION}"; then
+              echo "Skipping ${PKG_NAME}@${PKG_VERSION} (already published)"
+              cd ../..
+              continue
+            fi
             tarball=$(pnpm pack | tail -1)
             npm publish "$tarball" --access public
             rm -f "$tarball"
