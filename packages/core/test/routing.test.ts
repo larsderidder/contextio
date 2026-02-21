@@ -29,6 +29,12 @@ describe("classifyRequest", () => {
     assert.equal(result.provider, "chatgpt");
   });
 
+  it("classifies /codex/ traffic as chatgpt (Pi openai-codex provider)", () => {
+    const result = classifyRequest("/codex/responses", {});
+    assert.equal(result.provider, "chatgpt");
+    assert.equal(result.apiFormat, "chatgpt-backend");
+  });
+
   it("classifies Anthropic Messages API", () => {
     const result = classifyRequest("/v1/messages", {});
     assert.equal(result.provider, "anthropic");
@@ -329,6 +335,19 @@ describe("resolveTargetUrl", () => {
       result.targetUrl,
       "https://chatgpt.com/backend-api/api/test",
     );
+  });
+
+  it("prepends /backend-api for /codex/ paths (Pi openai-codex provider)", () => {
+    const upstreams = { ...mockUpstreams, chatgpt: "https://chatgpt.com" };
+    const result = resolveTargetUrl("/codex/responses", "", {}, upstreams);
+    assert.equal(result.provider, "chatgpt");
+    assert.equal(result.targetUrl, "https://chatgpt.com/backend-api/codex/responses");
+  });
+
+  it("does not double-prefix /backend-api paths", () => {
+    const upstreams = { ...mockUpstreams, chatgpt: "https://chatgpt.com" };
+    const result = resolveTargetUrl("/backend-api/codex/responses", "", {}, upstreams);
+    assert.equal(result.targetUrl, "https://chatgpt.com/backend-api/codex/responses");
   });
 
   it("resolves Vertex regional path to per-location aiplatform URL", () => {

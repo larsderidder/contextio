@@ -52,7 +52,8 @@ export function classifyRequest(
   headers: Record<string, string | undefined>,
 ): { provider: Provider; apiFormat: ApiFormat } {
   // ChatGPT backend (Codex subscription uses /api/ and /backend-api/ paths)
-  if (pathname.match(/^\/(api|backend-api)\//))
+  // /codex/ is used by Pi's openai-codex provider (appends /codex/responses to baseUrl)
+  if (pathname.match(/^\/(api|backend-api|codex)\//))
     return { provider: "chatgpt", apiFormat: "chatgpt-backend" };
 
   // Anthropic Messages API
@@ -165,7 +166,12 @@ export function resolveTargetUrl(
   let targetUrl = headers["x-target-url"];
   if (!targetUrl) {
     if (provider === "chatgpt") {
-      targetUrl = upstreams.chatgpt + pathname + qs;
+      // Paths from Pi's openai-codex provider arrive as /codex/responses
+      // (without the /backend-api prefix). Prepend it if missing.
+      const chatgptPath = pathname.match(/^\/(api|backend-api)\//)
+        ? pathname
+        : `/backend-api${pathname}`;
+      targetUrl = upstreams.chatgpt + chatgptPath + qs;
     } else if (provider === "anthropic") {
       targetUrl = upstreams.anthropic + pathname + qs;
     } else if (provider === "gemini") {
