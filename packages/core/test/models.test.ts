@@ -13,7 +13,7 @@ describe("models.ts", () => {
   describe("getContextLimit", () => {
     it("returns exact match for claude models", () => {
       assert.equal(getContextLimit("claude-opus-4-20250514"), 200000);
-      assert.equal(getContextLimit("claude-sonnet-4-20250514"), 200000);
+      assert.equal(getContextLimit("claude-sonnet-4-20250514"), 1000000);
       assert.equal(getContextLimit("claude-haiku-4-20250320"), 200000);
     });
 
@@ -152,9 +152,11 @@ describe("models.ts", () => {
   describe("CONTEXT_LIMITS", () => {
     it("has expected entries", () => {
       assert.equal(CONTEXT_LIMITS["claude-opus-4"], 200000);
+      assert.equal(CONTEXT_LIMITS["claude-sonnet-4"], 1000000);
       assert.equal(CONTEXT_LIMITS["gpt-4o"], 128000);
       assert.equal(CONTEXT_LIMITS["o1"], 200000);
       assert.equal(CONTEXT_LIMITS["gemini-1.5-pro"], 2097152);
+      assert.equal(CONTEXT_LIMITS["gemini-2.5-flash"], 1048576);
     });
   });
 });
