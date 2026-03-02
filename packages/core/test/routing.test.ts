@@ -337,6 +337,18 @@ describe("resolveTargetUrl", () => {
     );
   });
 
+  it("normalizes bare /responses to /v1/responses for Codex Enterprise (OPENAI_BASE_URL without /v1)", () => {
+    const result = resolveTargetUrl("/responses", "", {}, mockUpstreams);
+    assert.equal(result.provider, "openai");
+    assert.equal(result.targetUrl, "https://api.openai.com/v1/responses");
+  });
+
+  it("does not double-prefix /v1/responses when path already has /v1", () => {
+    const result = resolveTargetUrl("/v1/responses", "", {}, mockUpstreams);
+    assert.equal(result.provider, "openai");
+    assert.equal(result.targetUrl, "https://api.openai.com/v1/responses");
+  });
+
   it("prepends /backend-api for /codex/ paths (Pi openai-codex provider)", () => {
     const upstreams = { ...mockUpstreams, chatgpt: "https://chatgpt.com" };
     const result = resolveTargetUrl("/codex/responses", "", {}, upstreams);

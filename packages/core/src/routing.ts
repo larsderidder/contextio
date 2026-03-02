@@ -35,6 +35,7 @@ const API_PATH_SEGMENTS = new Set([
   "embeddings",
   "backend-api",
   "api",
+  "codex",
 ]);
 
 /**
@@ -189,7 +190,12 @@ export function resolveTargetUrl(
         targetUrl = upstreams.vertex + pathname + qs;
       }
     } else {
-      targetUrl = upstreams.openai + pathname + qs;
+      // Codex Enterprise sets OPENAI_BASE_URL without a /v1 suffix and
+      // appends paths like /responses directly. Normalize /responses to
+      // /v1/responses so it reaches the correct endpoint on api.openai.com.
+      const openaiPath =
+        pathname === "/responses" ? "/v1/responses" : pathname;
+      targetUrl = upstreams.openai + openaiPath + qs;
     }
   } else if (!targetUrl.startsWith("http")) {
     targetUrl = targetUrl + pathname + qs;
