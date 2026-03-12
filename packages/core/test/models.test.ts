@@ -99,7 +99,7 @@ describe("models.ts", () => {
 
     it("calculates cache costs for anthropic", () => {
       // Cache read: 10% of input price
-      // Cache write: 25% of input price
+      // Cache write: 125% of input price (1.25x)
       const cost = estimateCost(
         "claude-3-5-sonnet-20241022",
         1000,
@@ -110,9 +110,9 @@ describe("models.ts", () => {
       // input: 1000*3/1M = 0.003
       // output: 500*15/1M = 0.0075
       // cache read: 100*3*0.1/1M = 0.00003
-      // cache write: 50*3*0.25/1M = 0.0000375
-      // total: 0.0105675 -> rounded to 0.010568
-      assert.equal(cost, 0.010568);
+      // cache write: 50*3*1.25/1M = 0.0001875
+      // total: 0.0107175 -> rounded to 0.010718
+      assert.equal(cost, 0.010718);
     });
 
     it("returns null for unknown models", () => {

@@ -189,11 +189,11 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
  *
  * Each entry maps a model key prefix to `[readMultiplier, writeMultiplier]`
  * relative to the base input price.
- * - Anthropic: reads at 10% of base input, writes at 25%
+ * - Anthropic: reads at 10% of base input, writes at 125% (1.25x)
  * - Gemini: cached content at 25% of base input, no write billing
  */
 const CACHE_PRICING: Record<string, [number, number]> = {
-  "claude-": [0.1, 0.25],
+  "claude-": [0.1, 1.25],
   "gemini-": [0.25, 0],
 };
 
@@ -208,7 +208,7 @@ function getCacheMultipliers(modelKey: string): [number, number] {
  * Estimate cost in USD for a request/response token pair using `MODEL_PRICING`.
  *
  * Cache pricing varies by provider:
- * - Anthropic: cache reads at 10% of base input, writes at 25%
+ * - Anthropic: cache reads at 10% of base input, writes at 125% (1.25x)
  * - Gemini: cached content at 25% of base input, no write cost
  *
  * @param model - Model identifier (substring matched against known keys).
