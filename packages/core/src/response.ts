@@ -185,9 +185,15 @@ export function parseResponseUsage(
 /**
  * Parse streaming SSE chunks to extract usage from all three providers.
  *
- * Scans every `data: ` line for usage objects. Provider-specific events
- * are detected by their structure (Anthropic uses `type: "message_start"`,
- * OpenAI uses `choices` arrays, Gemini uses `usageMetadata`).
+ * Auto-detects the provider from the event structure rather than requiring
+ * a hint. Detection heuristics:
+ * - Anthropic: `type: "message_start"` carries the model and input tokens;
+ *   `type: "message_delta"` carries the stop reason and output tokens.
+ * - OpenAI: final chunk has both `usage` and `choices` fields together.
+ * - Gemini: `usageMetadata` appears directly on the event object.
+ *
+ * Mutates and returns `result` so the caller (parseResponseUsage) can
+ * pass in a pre-initialized object and get it back populated.
  */
 function parseStreamingUsage(
   chunks: string,

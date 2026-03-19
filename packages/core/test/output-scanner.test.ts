@@ -67,8 +67,18 @@ describe("output-scanner.ts", () => {
       assert.equal(result.isSafe, false);
     });
 
-    it("handles case insensitivity", () => {
+    it("handles case insensitivity (default)", () => {
       const result = scanBanSubstrings("DAN mode enabled", ["dan mode enabled"], false);
+      assert.equal(result.isSafe, false);
+    });
+
+    it("case-sensitive mode does not match wrong case", () => {
+      const result = scanBanSubstrings("DAN mode enabled", ["dan mode enabled"], true);
+      assert.equal(result.isSafe, true);
+    });
+
+    it("case-sensitive mode matches exact case", () => {
+      const result = scanBanSubstrings("dan mode enabled", ["dan mode enabled"], true);
       assert.equal(result.isSafe, false);
     });
   });
@@ -110,6 +120,39 @@ describe("output-scanner.ts", () => {
     it("handles invalid regex gracefully", () => {
       const result = scanRegex("test", ["[invalid"]);
       assert.equal(result.isSafe, true);
+    });
+
+    it("required mode (isBlocked=false): safe when all patterns present", () => {
+      // Both required patterns appear in text — no alerts, isSafe = true
+      const result = scanRegex(
+        "This response includes a disclaimer and a copyright notice.",
+        ["disclaimer", "copyright"],
+        false,
+      );
+      assert.equal(result.isSafe, true);
+      assert.equal(result.alerts.length, 0);
+    });
+
+    it("required mode (isBlocked=false): unsafe when a required pattern is absent", () => {
+      // "copyright" is missing — one alert, isSafe = false
+      const result = scanRegex(
+        "This response includes a disclaimer.",
+        ["disclaimer", "copyright"],
+        false,
+      );
+      assert.equal(result.isSafe, false);
+      assert.equal(result.alerts.length, 1);
+      assert.equal(result.alerts[0].pattern, "regex_1");
+    });
+
+    it("required mode (isBlocked=false): unsafe when all patterns are absent", () => {
+      const result = scanRegex(
+        "No required content here.",
+        ["disclaimer", "copyright"],
+        false,
+      );
+      assert.equal(result.isSafe, false);
+      assert.equal(result.alerts.length, 2);
     });
   });
 

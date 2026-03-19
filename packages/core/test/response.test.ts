@@ -83,6 +83,27 @@ describe("response.ts", () => {
       );
     });
 
+    it("parses Gemini Code Assist nested .response wrapper", () => {
+      // Code Assist wraps the Gemini response inside a .response field
+      const data = {
+        response: {
+          candidates: [{ finishReason: "STOP" }],
+          usageMetadata: {
+            promptTokenCount: 120,
+            candidatesTokenCount: 60,
+            cachedContentTokenCount: 20,
+          },
+          modelVersion: "gemini-2.0-flash",
+        },
+      };
+      const result = parseResponseUsage(data);
+      assert.equal(result.inputTokens, 120);
+      assert.equal(result.outputTokens, 60);
+      assert.equal(result.cacheReadTokens, 20);
+      assert.equal(result.model, "gemini-2.0-flash");
+      assert.deepEqual(result.finishReasons, ["STOP"]);
+    });
+
     it("extracts finish reasons from OpenAI choices", () => {
       const data = {
         choices: [{ finish_reason: "stop" }, { finish_reason: "length" }],

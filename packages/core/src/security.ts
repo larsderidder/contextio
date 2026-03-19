@@ -68,6 +68,10 @@ export interface SecurityResult {
  * Runs both tier 1 (known phrases) and tier 2 (heuristic) checks.
  * Tier 2 role confusion checks only run when the content role is "tool".
  *
+ * Note: `index` on all returned alerts is always 0. When scanning individual
+ * messages from a conversation, use {@link scanRequestMessages} instead, or
+ * overwrite `alert.index` after this call.
+ *
  * @param text - The text to scan.
  * @param options - Optional: role, tool name, and whether to skip system messages.
  * @returns Alerts found, plus a severity summary.
