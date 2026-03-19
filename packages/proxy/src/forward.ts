@@ -145,6 +145,13 @@ function buildForwardHeaders(
   return forwardHeaders;
 }
 
+/**
+ * Assemble a CaptureData record from the completed request/response cycle.
+ *
+ * Takes the final plugin-processed request context (`ctx`) rather than the
+ * raw request, so the captured body and headers reflect what was actually
+ * forwarded to the upstream (after redaction, etc.), not the original client request.
+ */
 function buildCaptureData(options: {
   sessionId: string | null;
   req: http.IncomingMessage;
@@ -394,10 +401,14 @@ export function createProxyHandler(
         rawBody: bodyBuffer,
       };
 
-      // Run the async plugin pipeline, then forward
+      // Run the async plugin pipeline, then forward.
+      // doForward is a closure so it can reference bodyBuffer, bodyJson,
+      // contentEncoding, and the timing/capture variables from the outer scope
+      // without threading them through as parameters.
       const doForward = (ctx: RequestContext): void => {
         // If a plugin modified the body, re-serialize as plain JSON.
-        // Otherwise forward original bytes (possibly still compressed).
+        // Otherwise forward the original bytes (possibly still compressed)
+        // to avoid needlessly re-encoding what the upstream already sent.
         let forwardBuffer: Buffer;
         let bodyWasModified = false;
         if (ctx.body && ctx.body !== bodyJson) {
@@ -449,8 +460,9 @@ export function createProxyHandler(
             let respBytes = 0;
             const respChunks: Buffer[] = [];
 
-            // For non-streaming with response plugins, we need to buffer
-            // the full response before sending to the client.
+            // Buffer the full response only when response plugins are active
+            // AND the response is not streaming. Streaming responses must be
+            // forwarded chunk by chunk; buffering them would break SSE clients.
             const shouldBufferResponse =
               hasResponsePlugins && !isStreaming;
 
@@ -507,7 +519,10 @@ export function createProxyHandler(
               const respBody =
                 Buffer.concat(respChunks).toString("utf8");
 
-              // Run response plugins for non-streaming responses
+              // finishResponse is called once the response body is final:
+              // either immediately after the upstream ends (non-buffered path)
+              // or after response plugins have run (buffered path). It writes
+              // headers+body to the client, then fires capture plugins.
               const finishResponse = (
                 finalBody: string,
                 finalHeaders: HeaderMap,

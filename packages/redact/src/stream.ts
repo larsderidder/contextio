@@ -151,9 +151,28 @@ export function createStreamRehydrator(map: ReplacementMap): {
     held = [];
   }
 
+  /**
+   * Process one line from the SSE stream.
+   *
+   * Lines fall into three categories:
+   *
+   * 1. Non-`data:` lines (empty separator lines, `event:` lines, etc.):
+   *    Empty lines are held without forcing a flush because a placeholder
+   *    can span across the empty line separator between two SSE events.
+   *    Non-empty non-data lines (like `event: done`) force a flush first,
+   *    since they mark a boundary where content won't continue.
+   *
+   * 2. `data:` lines with no extractable text content (e.g. `data: [DONE]`,
+   *    usage events, metadata events): force a flush, then pass through.
+   *
+   * 3. `data:` lines with text content: accumulate the text into `contentBuf`
+   *    and hold the line for deferred output. `flushHeld` decides whether to
+   *    emit now or wait for more content based on whether a placeholder looks
+   *    like it might be split across the next chunk.
+   */
   function processLine(line: string): void {
     if (!line.startsWith("data: ")) {
-      // Empty lines must not force flush (placeholders span events).
+      // Empty separator lines must not force a flush; a placeholder can span them.
       if (line.trim().length > 0) {
         flushHeld(true);
       }
@@ -166,7 +185,7 @@ export function createStreamRehydrator(map: ReplacementMap): {
     const extracted = extractContent(json);
 
     if (extracted === null) {
-      // Non-content data line; force flush and pass through
+      // Non-content data line (usage stats, [DONE], etc.); flush and pass through.
       flushHeld(true);
       outputParts.push(line);
       return;

@@ -31,6 +31,10 @@ export function createStats(): RedactionStats {
  *
  * This is how context-gated rules work: a pattern like SSN (XXX-XX-XXXX)
  * only fires when words like "ssn" or "social security" appear nearby.
+ * The window extends both before and after the match, so either side counts.
+ *
+ * Comparison is done on a lowercased slice of the original text, so context
+ * words should always be supplied in lowercase.
  */
 function hasContextNearby(
   text: string,
@@ -48,7 +52,13 @@ function hasContextNearby(
   return false;
 }
 
-/** Check if a matched value is in the allowlist (exact string or regex pattern). */
+/**
+ * Check if a matched value is in the allowlist.
+ *
+ * Exact string matches are checked first (fast Set lookup). If none match,
+ * each allowlist regex is tested. The regex `lastIndex` is reset before
+ * testing to avoid stale state from previous calls.
+ */
 function isAllowlisted(
   match: string,
   allowlistStrings: Set<string>,
@@ -103,9 +113,10 @@ function shouldRedactPath(
 /**
  * Resolve the replacement string for a matched value.
  *
- * When a ReplacementMap is provided, generates a numbered placeholder
- * and records the mapping for later rehydration. Otherwise uses the
- * rule's static replacement.
+ * In non-reversible mode (`map` is null), returns the rule's static
+ * replacement string (e.g. "[EMAIL_REDACTED]"). In reversible mode, delegates
+ * to the ReplacementMap which generates a numbered placeholder and records
+ * the original so it can be restored later from the LLM's response.
  */
 function resolveReplacement(
   match: string,
@@ -213,7 +224,7 @@ export function redactWithPolicy(
   }
 
   if (Array.isArray(value)) {
-    return value.map((item, i) =>
+    return value.map((item) =>
       redactWithPolicy(item, policy, stats, [...currentPath, "*"], map),
     );
   }
