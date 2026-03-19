@@ -1,11 +1,9 @@
 import type {
   AttachArgs,
-  ExportArgs,
   InspectArgs,
   MonitorArgs,
   ParsedArgs,
   ProxyArgs,
-  ReplayArgs,
 } from "./args.js";
 
 interface ProxyHandlers {
@@ -20,8 +18,6 @@ interface CommandHandlers {
   runProxy: ProxyHandlers;
   runMonitor: (args: MonitorArgs) => Promise<void>;
   runInspect: (args: InspectArgs) => Promise<void>;
-  runReplay: (args: ReplayArgs) => Promise<void>;
-  runExport: (args: ExportArgs) => Promise<number>;
 }
 
 export async function dispatchCommand(
@@ -53,10 +49,5 @@ export async function dispatchCommand(
     case "inspect":
       await handlers.runInspect(result);
       return undefined;
-    case "replay":
-      await handlers.runReplay(result);
-      return undefined;
-    case "export":
-      return handlers.runExport(result);
   }
 }

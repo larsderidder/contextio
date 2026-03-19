@@ -2,12 +2,19 @@
  * CLI argument parsing.
  *
  * Uses Commander to define subcommands (proxy, attach, monitor, inspect,
- * replay, export, doctor) and parse argv into typed result objects.
+ * doctor) and parse argv into typed result objects.
  * The parser never calls process.exit; instead it returns ParseResult
  * which is either a typed args object or a ParseError.
  */
 
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { Command } from "commander";
+
+const _pkgPath = new URL("../package.json", import.meta.url);
+const _pkg = JSON.parse(fs.readFileSync(fileURLToPath(_pkgPath), "utf8")) as { version: string };
+const CLI_VERSION: string = _pkg.version;
 
 /** Parsed arguments for `ctxio proxy`. */
 export interface ProxyArgs {
@@ -59,26 +66,6 @@ export interface InspectArgs {
   full: boolean;
 }
 
-/** Parsed arguments for `ctxio replay`. */
-export interface ReplayArgs {
-  command: "replay";
-  captureFile: string;
-  /** Show diff between original and new response. */
-  diff: boolean;
-  /** Swap the model before replaying. */
-  model: string | null;
-}
-
-/** Parsed arguments for `ctxio export`. */
-export interface ExportArgs {
-  command: "export";
-  session: string | null;
-  last: boolean;
-  outputPath: string | null;
-  /** Strip request/response bodies, keep metadata only. */
-  redact: boolean;
-}
-
 /** Parsed arguments for `ctxio doctor`. */
 export interface DoctorArgs {
   command: "doctor";
@@ -90,8 +77,6 @@ export type ParsedArgs =
   | AttachArgs
   | MonitorArgs
   | InspectArgs
-  | ReplayArgs
-  | ExportArgs
   | DoctorArgs;
 
 /** Returned when argument parsing fails. */
@@ -114,7 +99,7 @@ export function buildProgram(
   const program = new Command()
     .name("ctxio")
     .description("LLM API proxy toolkit")
-    .version("0.1.0", "-v, --version")
+    .version(CLI_VERSION, "-v, --version")
     .enablePositionalOptions()
     .exitOverride()
     .configureOutput({ writeErr: () => {}, writeOut: () => {} });
@@ -247,48 +232,6 @@ export function buildProgram(
         last: opts.last || false,
         source: opts.source || null,
         full: opts.full || false,
-      });
-    });
-
-  // --- replay ---
-  program
-    .command("replay")
-    .description("Re-send a captured request to the API")
-    .usage("<capture-file> [options]")
-    .argument("<capture-file>", "path to the capture JSON file")
-    .option("--diff", "show diff between original and new response")
-    .option("--model <name>", "swap the model in the request")
-    .exitOverride()
-    .action((captureFile, opts) => {
-      onResult({
-        command: "replay",
-        captureFile,
-        diff: opts.diff || false,
-        model: opts.model || null,
-      });
-    });
-
-  // --- export ---
-  program
-    .command("export")
-    .description("Bundle session captures into a shareable file")
-    .usage("[sessionId] [options]")
-    .argument("[sessionId]", "session ID to export")
-    .option("--last", "export the most recent session")
-    .option("-o, --output <path>", "output file path")
-    .option("--redact", "strip request/response bodies, keep metadata only")
-    .exitOverride()
-    .action((sessionId, opts) => {
-      if (!sessionId && !opts.last) {
-        onResult({ error: "Must specify session ID or --last" });
-        return;
-      }
-      onResult({
-        command: "export",
-        session: sessionId || null,
-        last: opts.last || false,
-        outputPath: opts.output || null,
-        redact: opts.redact || false,
       });
     });
 

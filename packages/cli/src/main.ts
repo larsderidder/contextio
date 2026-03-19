@@ -34,11 +34,11 @@ import type { AttachArgs, ProxyArgs } from "./args.js";
 import { getToolEnv } from "./tools.js";
 import { runMonitor } from "./monitor.js";
 import { runInspect } from "./inspect.js";
-import { runReplay } from "./replay.js";
-import { runExport } from "./export.js";
 import { dispatchCommand } from "./dispatch.js";
 
-const VERSION = "0.1.0";
+const _pkgPath = new URL("../package.json", import.meta.url);
+const _pkg = JSON.parse(fs.readFileSync(fileURLToPath(_pkgPath), "utf8")) as { version: string };
+const VERSION: string = _pkg.version;
 const CLI_ENTRY = fileURLToPath(import.meta.url);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const MITM_PORT = 8080;
@@ -677,7 +677,11 @@ async function runWrap(args: ProxyArgs, wrap: string[]): Promise<void> {
     }
 
     mitmPort = await chooseMitmPort(MITM_PORT);
-    childEnv.https_proxy = `http://127.0.0.1:${mitmPort}`;
+    const mitmProxyUrl = `http://127.0.0.1:${mitmPort}`;
+    childEnv.https_proxy = mitmProxyUrl;
+    childEnv.HTTPS_PROXY = mitmProxyUrl;
+    childEnv.http_proxy = mitmProxyUrl;
+    childEnv.HTTP_PROXY = mitmProxyUrl;
     if (mitmPort !== MITM_PORT) {
       console.log(
         `Port ${MITM_PORT} is in use; using mitmproxy port ${mitmPort}.`,
@@ -892,8 +896,6 @@ async function main(): Promise<void> {
     },
     runMonitor,
     runInspect,
-    runReplay,
-    runExport,
   });
 
   if (typeof exitCode === "number") {

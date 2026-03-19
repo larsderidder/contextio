@@ -139,8 +139,11 @@ function matchesFilter(c: CaptureDisplay, args: MonitorArgs): boolean {
   return true;
 }
 
-/** Parse a duration string like "30m", "1h", "60s" into milliseconds. */
-function parseLastArg(arg: string): number | null {
+/**
+ * Parse a duration string like "30m", "1h", "60s" into milliseconds.
+ * Returns null for unrecognised formats.
+ */
+export function parseLastArg(arg: string): number | null {
   const match = arg.match(/^(\d+)([smh])$/);
   if (!match) return null;
   const value = parseInt(match[1], 10);
@@ -235,11 +238,16 @@ export async function runMonitor(args: MonitorArgs): Promise<void> {
 
   try {
     watcher = fs.watch(dir, (eventType, filename) => {
+      // "rename" fires when a file is created or deleted; "change" fires for
+      // content changes. We only care about new files appearing.
       if (eventType !== "rename") return;
       if (!filename || !filename.endsWith(".json")) return;
       if (filename.endsWith(".tmp")) return;
 
       const filepath = join(dir, filename);
+      // The logger writes atomically (tmp -> rename), but the rename event
+      // fires before the file is fully flushed on some platforms. A short
+      // delay ensures the file is readable before we try to parse it.
       setTimeout(() => processFile(filepath), 100);
     });
 

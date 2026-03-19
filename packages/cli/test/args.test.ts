@@ -210,58 +210,6 @@ describe("parseArgs", () => {
     }
   });
 
-  // --- replay ---
-
-  it("replay with file", () => {
-    const r = parse("replay", "test.json");
-    assert.ok(!isError(r));
-    if (r.command === "replay") {
-      assert.equal(r.captureFile, "test.json");
-      assert.equal(r.diff, false);
-      assert.equal(r.model, null);
-    }
-  });
-
-  it("replay --diff --model", () => {
-    const r = parse("replay", "test.json", "--diff", "--model", "gpt-4o");
-    assert.ok(!isError(r));
-    if (r.command === "replay") {
-      assert.equal(r.diff, true);
-      assert.equal(r.model, "gpt-4o");
-    }
-  });
-
-  it("replay requires a file", () => {
-    const r = parse("replay");
-    assert.ok(isError(r));
-  });
-
-  // --- export ---
-
-  it("export with session", () => {
-    const r = parse("export", "abc12345");
-    assert.ok(!isError(r));
-    if (r.command === "export") {
-      assert.equal(r.session, "abc12345");
-      assert.equal(r.last, false);
-    }
-  });
-
-  it("export --last -o --redact", () => {
-    const r = parse("export", "--last", "-o", "/tmp/out.json", "--redact");
-    assert.ok(!isError(r));
-    if (r.command === "export") {
-      assert.equal(r.last, true);
-      assert.equal(r.outputPath, "/tmp/out.json");
-      assert.equal(r.redact, true);
-    }
-  });
-
-  it("export requires session or --last", () => {
-    const r = parse("export");
-    assert.ok(isError(r));
-  });
-
   // --- doctor ---
 
   it("doctor", () => {

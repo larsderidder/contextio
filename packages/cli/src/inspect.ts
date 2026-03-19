@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import { join } from "node:path";
 
-import { estimateTokens, type CaptureData } from "@contextio/core";
+import { estimateTokens, type CaptureData, type JsonObject } from "@contextio/core";
 
 import type { InspectArgs } from "./args.js";
 import { captureDir, listCaptureFiles, readCapture } from "./captures.js";
@@ -63,8 +63,13 @@ function findSessionFiles(args: InspectArgs): string[] {
   return [];
 }
 
-/** Extract system prompt and tool definitions from an Anthropic Messages API request. */
-function extractAnthropicSystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
+/** Narrow a JsonValue to a JsonObject, or return null if it's not an object. */
+function asObj(v: unknown): JsonObject | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as JsonObject;
+  return null;
+}
+
+function extractAnthropicSystemPrompt(body: JsonObject): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
 
@@ -75,8 +80,9 @@ function extractAnthropicSystemPrompt(body: Record<string, any>): { system: stri
     for (const item of body.system) {
       if (typeof item === "string") {
         parts.push(item);
-      } else if (item?.type === "text") {
-        parts.push(item.text || "");
+      } else {
+        const o = asObj(item);
+        if (o?.type === "text") parts.push(typeof o.text === "string" ? o.text : "");
       }
     }
     system = parts.join("\n");
@@ -84,10 +90,14 @@ function extractAnthropicSystemPrompt(body: Record<string, any>): { system: stri
 
   if (Array.isArray(body.tools)) {
     for (const tool of body.tools) {
+      const t = asObj(tool);
+      if (!t) continue;
+      const schema = asObj(t.input_schema);
+      const props = asObj(schema?.properties ?? null);
       tools.push({
-        name: tool.name || "?",
-        description: tool.description || "",
-        paramCount: tool.input_schema?.properties ? Object.keys(tool.input_schema.properties).length : 0,
+        name: typeof t.name === "string" ? t.name : "?",
+        description: typeof t.description === "string" ? t.description : "",
+        paramCount: props ? Object.keys(props).length : 0,
       });
     }
   }
@@ -111,47 +121,52 @@ function extractTextContent(content: unknown): string | null {
 }
 
 /** Extract system prompt and tool definitions from an OpenAI Chat Completions request. */
-function extractOpenAISystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
+function extractOpenAISystemPrompt(body: JsonObject): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
 
-  const messages = body.messages || [];
+  const messages = Array.isArray(body.messages) ? body.messages : [];
   for (const msg of messages) {
-    if (msg.role === "system" || msg.role === "developer") {
-      const contentText = extractTextContent(msg.content);
-      if (contentText !== null) {
-        system = contentText;
-      }
+    const m = asObj(msg);
+    if (!m) continue;
+    if (m.role === "system" || m.role === "developer") {
+      const contentText = extractTextContent(m.content);
+      if (contentText !== null) system = contentText;
       break;
     }
   }
 
-  const toolList = body.tools || body.functions;
-  if (Array.isArray(toolList)) {
-    for (const tool of toolList) {
-      tools.push({
-        name: tool.name || "?",
-        description: tool.description || "",
-        paramCount: tool.parameters?.properties ? Object.keys(tool.parameters.properties).length : 0,
-      });
-    }
+  const toolList = Array.isArray(body.tools) ? body.tools : Array.isArray(body.functions) ? body.functions : [];
+  for (const tool of toolList) {
+    const t = asObj(tool);
+    if (!t) continue;
+    const params = asObj(t.parameters);
+    const props = asObj(params?.properties ?? null);
+    tools.push({
+      name: typeof t.name === "string" ? t.name : "?",
+      description: typeof t.description === "string" ? t.description : "",
+      paramCount: props ? Object.keys(props).length : 0,
+    });
   }
 
   return { system, tools };
 }
 
 /** Extract system instruction and tool declarations from a Gemini API request. */
-function extractGeminiSystemPrompt(body: Record<string, any>): { system: string | null; tools: ToolDefinition[] } {
+function extractGeminiSystemPrompt(body: JsonObject): { system: string | null; tools: ToolDefinition[] } {
   let system: string | null = null;
   const tools: ToolDefinition[] = [];
 
-  if (body.systemInstruction) {
-    if (typeof body.systemInstruction === "string") {
-      system = body.systemInstruction;
-    } else if (body.systemInstruction.parts) {
+  const sysInstruction = body.systemInstruction;
+  if (typeof sysInstruction === "string") {
+    system = sysInstruction;
+  } else {
+    const si = asObj(sysInstruction);
+    if (si && Array.isArray(si.parts)) {
       const parts: string[] = [];
-      for (const part of body.systemInstruction.parts) {
-        if (part.text) parts.push(part.text);
+      for (const part of si.parts) {
+        const p = asObj(part);
+        if (p && typeof p.text === "string") parts.push(p.text);
       }
       system = parts.join("\n");
     }
@@ -159,14 +174,18 @@ function extractGeminiSystemPrompt(body: Record<string, any>): { system: string 
 
   if (Array.isArray(body.tools)) {
     for (const tool of body.tools) {
-      if (tool.functionDeclarations) {
-        for (const decl of tool.functionDeclarations) {
-          tools.push({
-            name: decl.name || "?",
-            description: decl.description || "",
-            paramCount: decl.parameters?.properties ? Object.keys(decl.parameters.properties).length : 0,
-          });
-        }
+      const t = asObj(tool);
+      if (!t || !Array.isArray(t.functionDeclarations)) continue;
+      for (const decl of t.functionDeclarations) {
+        const d = asObj(decl);
+        if (!d) continue;
+        const params = asObj(d.parameters);
+        const props = asObj(params?.properties ?? null);
+        tools.push({
+          name: typeof d.name === "string" ? d.name : "?",
+          description: typeof d.description === "string" ? d.description : "",
+          paramCount: props ? Object.keys(props).length : 0,
+        });
       }
     }
   }
@@ -177,7 +196,7 @@ function extractGeminiSystemPrompt(body: Record<string, any>): { system: string 
 /** Extract system prompt and tools from a capture, dispatching by provider. */
 function extractSystemPrompt(capture: CaptureData): { system: string | null; tools: ToolDefinition[] } {
   const body = capture.requestBody;
-  if (!body || typeof body !== "object") {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return { system: null, tools: [] };
   }
 
