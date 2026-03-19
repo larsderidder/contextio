@@ -3,58 +3,59 @@
  *
  * Each preset is an ordered array of RedactionRules.
  * Presets build on each other: pii includes secrets, strict includes pii.
+ *
+ * Credential patterns (private key, AWS, GitHub, Anthropic, OpenAI, generic
+ * secret assignment) are derived from the canonical CREDENTIAL_PATTERNS in
+ * @contextio/core/security-patterns so detection and redaction stay in sync.
  */
 
+import { CREDENTIAL_PATTERNS } from "@contextio/core";
+
 import type { RedactionRule } from "./rules.js";
+
+/**
+ * Build a RedactionRule from a CredentialPattern by adding a global flag and
+ * a replacement string. The source pattern must not already have the global flag.
+ */
+function toRule(id: string, replacement: string): RedactionRule {
+  const cp = CREDENTIAL_PATTERNS.find((p) => p.id === id);
+  if (!cp) throw new Error(`Unknown credential pattern id: ${id}`);
+  // Re-compile with global flag for use in string.replace()
+  const src = cp.pattern.source;
+  const flags = cp.pattern.flags.includes("g") ? cp.pattern.flags : `g${cp.pattern.flags}`;
+  return { name: id, pattern: new RegExp(src, flags), replacement };
+}
 
 // ---- Secrets preset ----
 // High-confidence patterns for API keys, tokens, and credentials.
 // Very low false-positive rate; safe to run on all traffic.
 
 const SECRETS_RULES: RedactionRule[] = [
+  // Private key blocks — match the full block including content
   {
     name: "private-key",
     pattern:
       /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
     replacement: "[PRIVATE_KEY_REDACTED]",
   },
-  {
-    name: "aws-access-key",
-    pattern: /\b(AKIA[0-9A-Z]{16})\b/g,
-    replacement: "[AWS_KEY_REDACTED]",
-  },
+  toRule("credential_aws_key", "[AWS_KEY_REDACTED]"),
+  // AWS secret key — not in CREDENTIAL_PATTERNS (it's assignment-context-only)
   {
     name: "aws-secret-key",
     pattern:
       /(?<=(?:aws_secret_access_key|secret_?key|SECRET_?KEY)\s*[=:]\s*["']?)[A-Za-z0-9/+=]{40}(?=["']?\s)/g,
     replacement: "[AWS_SECRET_REDACTED]",
   },
-  {
-    name: "github-token",
-    pattern: /\b(gh[pousr]_[A-Za-z0-9_]{36,})\b/g,
-    replacement: "[GITHUB_TOKEN_REDACTED]",
-  },
-  {
-    name: "anthropic-api-key",
-    pattern: /\b(sk-ant-(?:api|admin)\d{2}-[a-zA-Z0-9_-]{80,})\b/g,
-    replacement: "[ANTHROPIC_KEY_REDACTED]",
-  },
-  {
-    name: "openai-api-key",
-    pattern: /\b(sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})\b/g,
-    replacement: "[OPENAI_KEY_REDACTED]",
-  },
+  toRule("credential_github", "[GITHUB_TOKEN_REDACTED]"),
+  toRule("credential_anthropic", "[ANTHROPIC_KEY_REDACTED]"),
+  toRule("credential_openai", "[OPENAI_KEY_REDACTED]"),
+  // Broader prefix-based catch-all (sk-, pk-, api-, key-, token- prefixed values)
   {
     name: "api-key-prefixed",
     pattern: /\b(?:sk|pk|api|key|token)[-_][A-Za-z0-9_-]{20,}\b/g,
     replacement: "[API_KEY_REDACTED]",
   },
-  {
-    name: "generic-secret-assignment",
-    pattern:
-      /(?<=(?:password|passwd|secret|token|api_?key|apikey|access_?key)\s*[=:]\s*["']?)[A-Za-z0-9/+_.=-]{16,}(?=["']?\s|$)/gi,
-    replacement: "[SECRET_REDACTED]",
-  },
+  toRule("credential_generic", "[SECRET_REDACTED]"),
 ];
 
 // ---- PII preset ----

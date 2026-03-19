@@ -50,6 +50,12 @@ export {
   type SecuritySummary,
 } from "./security.js";
 
+// Security patterns: shared regex data for injection detection and credential scanning
+export {
+  CREDENTIAL_PATTERNS,
+  type CredentialPattern,
+} from "./security-patterns.js";
+
 // Output security: jailbreak outputs, dangerous code, URL scanning
 export {
   OUTPUT_BAN_SUBSTRINGS,

@@ -1,8 +1,20 @@
+/**
+ * Raw pattern data for prompt injection and jailbreak detection.
+ *
+ * Shared between `security.ts` (input scanning) and kept separate so the
+ * pattern lists can be updated without touching scanner logic. Also exports
+ * small utilities (`truncateMatch`, `escapeRegex`) that multiple scanners need.
+ */
+
+/** Severity level for a security alert. "info" is observational; "high" warrants action. */
 export type AlertSeverity = "high" | "medium" | "info";
 
+/** A single pattern rule used by the tier-1 injection scanner. */
 interface PatternRule {
+  /** Stable identifier used in alert reports and filtering. */
   id: string;
   severity: AlertSeverity;
+  /** Must be stateless (no global flag) since `exec` is called once per string. */
   pattern: RegExp;
 }
 
@@ -82,7 +94,10 @@ export const TIER1_PATTERNS: PatternRule[] = [
     pattern: /<\|(?:system|user|assistant|endof(?:text|turn)|sep|pad)\|>/,
   },
 
-  // Base64-encoded instruction blocks (heuristic: long base64 string > 100 chars)
+  // Base64-encoded instruction blocks.
+  // 100+ character base64 strings are suspicious in user/tool messages; legitimate
+  // content rarely contains them, but attackers use them to hide instructions from
+  // human reviewers while the model still decodes and follows them.
   {
     id: "base64_block",
     severity: "medium",
@@ -137,10 +152,82 @@ export const SUSPICIOUS_UNICODE: RegExp =
   /[\u200B-\u200F\u2028-\u202F\uFEFF\u061C\u115F\u1160\u17B4\u17B5\u180E\u2000-\u200A\u2060-\u2064\u2066-\u2069\u206A-\u206F]|\u00AD|\u034F/;
 
 // ----------------------------------------------------------------------------
+// Tier 3: Credential detection patterns
+//
+// Detection-only regexes (no global flag). Used by the security scanner to
+// alert when credentials appear in message content. The redact package uses
+// these as the canonical source and wraps them in RedactionRule objects with
+// replacements and the global flag.
+//
+// Patterns are listed most-specific first so precise matches are preferred
+// when scanners iterate in order.
+// ----------------------------------------------------------------------------
+
+/** A credential detection rule. `pattern` must NOT use the global flag. */
+export interface CredentialPattern {
+  /** Stable identifier used in alert reports. */
+  id: string;
+  /** Human-readable label shown in UI alerts. */
+  label: string;
+  /** Detection regex. Stateless — no global flag. */
+  pattern: RegExp;
+}
+
+export const CREDENTIAL_PATTERNS: CredentialPattern[] = [
+  {
+    id: "credential_private_key",
+    label: "Private key block",
+    pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
+  },
+  {
+    id: "credential_aws_key",
+    label: "AWS access key",
+    pattern: /\bAKIA[0-9A-Z]{16}\b/,
+  },
+  {
+    id: "credential_github",
+    label: "GitHub token",
+    pattern: /\bgh[pousr]_[A-Za-z0-9_]{36,}\b/,
+  },
+  {
+    id: "credential_anthropic",
+    label: "Anthropic API key",
+    pattern: /\bsk-ant-(?:api|admin)\d{2}-[a-zA-Z0-9_-]{80,}\b/,
+  },
+  {
+    id: "credential_openai",
+    label: "OpenAI API key",
+    // Classic format: sk-<20chars>T3BlbkFJ<20chars>
+    // Project key format: sk-proj-<chars>
+    pattern: /\bsk-(?:[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20}|proj-[a-zA-Z0-9_-]{20,})\b/,
+  },
+  {
+    id: "credential_generic",
+    label: "Likely API key or secret",
+    // Context-gated: fires only when a credential-hinting label is nearby.
+    // Covers: api_key=, token:, secret=, password=, bearer <value>
+    pattern:
+      /(?<=(?:api[_-]?key|apikey|access[_-]?key|token|secret|password|passwd|bearer)\s*[=:]\s*["']?)[A-Za-z0-9/+_.=-]{20,}(?=["']?(?:\s|$))/im,
+  },
+];
+
+// ----------------------------------------------------------------------------
 // Helper functions
 // ----------------------------------------------------------------------------
 
+/**
+ * Extract a snippet from `text` at `[start, start+length)`, capped at 120 chars.
+ * Used to keep alert `match` fields readable without embedding huge strings.
+ */
 export function truncateMatch(text: string, start: number, length: number): string {
   const snippet = text.slice(start, start + length);
   return snippet.length > 120 ? `${snippet.slice(0, 117)}...` : snippet;
+}
+
+/**
+ * Escape special regex characters in a string so it can be embedded
+ * in a RegExp pattern without treating any character as a metacharacter.
+ */
+export function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
