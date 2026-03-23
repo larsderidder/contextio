@@ -99,8 +99,12 @@ export const CONTEXT_LIMITS: Record<string, number> = {
  * @returns Context limit in tokens.
  */
 export function getContextLimit(model: string): number {
+  // Normalize the model string so dot-keyed entries (e.g. "claude-opus-4.6")
+  // match both dotted API IDs and hyphenated ones (e.g. "claude-opus-4-6-20251101").
+  const normalized = model.replace(/\./g, "-");
   for (const [key, limit] of Object.entries(CONTEXT_LIMITS)) {
-    if (model.includes(key)) return limit;
+    const normalizedKey = key.replace(/\./g, "-");
+    if (normalized.includes(normalizedKey)) return limit;
   }
   return 128000;
 }
@@ -225,8 +229,9 @@ export function estimateCost(
   cacheReadTokens = 0,
   cacheWriteTokens = 0,
 ): number | null {
+  const normalizedModel = model.replace(/\./g, "-");
   for (const [key, [inp, out]] of Object.entries(MODEL_PRICING)) {
-    if (model.includes(key)) {
+    if (normalizedModel.includes(key.replace(/\./g, "-"))) {
       const [readMul, writeMul] = getCacheMultipliers(key);
       const cacheReadCost = cacheReadTokens * inp * readMul;
       const cacheWriteCost = cacheWriteTokens * inp * writeMul;
