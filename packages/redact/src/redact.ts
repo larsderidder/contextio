@@ -6,6 +6,8 @@
  * Preserves structure; does not mutate the original.
  */
 
+import { shannonEntropy } from "@contextio/core";
+
 import type { ReplacementMap } from "./mapping.js";
 import type { CompiledPolicy } from "./policy.js";
 import type { RedactionRule } from "./rules.js";
@@ -68,6 +70,24 @@ function isAllowlisted(
   for (const pat of allowlistPatterns) {
     pat.lastIndex = 0;
     if (pat.test(match)) return true;
+  }
+  return false;
+}
+
+/**
+ * Check the per-rule allowlist from a CredentialPattern.
+ *
+ * Anchored patterns (source starts with "^") are tested against the first
+ * capture group so they can match just the credential value, not the full
+ * match string. All other patterns are tested against the full match.
+ *
+ * Returns true if the match should be suppressed.
+ */
+function isRuleAllowlisted(fullMatch: string, capturedGroup: string | undefined, ruleAllowlist: RegExp[]): boolean {
+  for (const al of ruleAllowlist) {
+    al.lastIndex = 0;
+    const target = al.source.startsWith("^") ? (capturedGroup ?? fullMatch) : fullMatch;
+    if (al.test(target)) return true;
   }
   return false;
 }
@@ -146,17 +166,19 @@ function redactString(
     if (rule.context && rule.context.length > 0) {
       // Context-gated: use exec loop to check context per match
       const window = rule.contextWindow ?? 100;
-      const matches: { start: number; end: number; match: string }[] = [];
+      const matches: { start: number; end: number; match: string; captured: string | undefined }[] = [];
       let m: RegExpExecArray | null;
       rule.pattern.lastIndex = 0;
       while ((m = rule.pattern.exec(result)) !== null) {
-        matches.push({ start: m.index, end: m.index + m[0].length, match: m[0] });
+        matches.push({ start: m.index, end: m.index + m[0].length, match: m[0], captured: m[1] });
       }
 
       // Apply replacements in reverse order to preserve indices
       for (let i = matches.length - 1; i >= 0; i--) {
-        const { start, end, match } = matches[i];
+        const { start, end, match, captured } = matches[i];
         if (isAllowlisted(match, allowlistStrings, allowlistPatterns)) continue;
+        if (rule.allowlist && isRuleAllowlisted(match, captured, rule.allowlist)) continue;
+        if (rule.minEntropy !== undefined && shannonEntropy(captured ?? match) < rule.minEntropy) continue;
         if (!hasContextNearby(result, start, end, rule.context, window)) continue;
         stats.totalReplacements++;
         stats.byRule[rule.name] = (stats.byRule[rule.name] || 0) + 1;
@@ -165,8 +187,12 @@ function redactString(
       }
     } else {
       // No context gating: simple replace
-      result = result.replace(rule.pattern, (match) => {
+      result = result.replace(rule.pattern, (match, ...args) => {
+        // args: [cap1, cap2, ..., offset, fullString] — first arg is capture group 1 if present
+        const captured = typeof args[0] === "string" ? args[0] : undefined;
         if (isAllowlisted(match, allowlistStrings, allowlistPatterns)) return match;
+        if (rule.allowlist && isRuleAllowlisted(match, captured, rule.allowlist)) return match;
+        if (rule.minEntropy !== undefined && shannonEntropy(captured ?? match) < rule.minEntropy) return match;
         stats.totalReplacements++;
         stats.byRule[rule.name] = (stats.byRule[rule.name] || 0) + 1;
         return resolveReplacement(match, rule, map);

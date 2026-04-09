@@ -9,13 +9,16 @@
  * @contextio/core/security-patterns so detection and redaction stay in sync.
  */
 
-import { CREDENTIAL_PATTERNS } from "@contextio/core";
+import { CREDENTIAL_PATTERNS, shannonEntropy } from "@contextio/core";
 
 import type { RedactionRule } from "./rules.js";
 
 /**
  * Build a RedactionRule from a CredentialPattern by adding a global flag and
  * a replacement string. The source pattern must not already have the global flag.
+ *
+ * Carries over the CredentialPattern's allowlist so detection and redaction
+ * stay in sync — FP suppression rules are not silently dropped.
  */
 function toRule(id: string, replacement: string): RedactionRule {
   const cp = CREDENTIAL_PATTERNS.find((p) => p.id === id);
@@ -23,7 +26,10 @@ function toRule(id: string, replacement: string): RedactionRule {
   // Re-compile with global flag for use in string.replace()
   const src = cp.pattern.source;
   const flags = cp.pattern.flags.includes("g") ? cp.pattern.flags : `g${cp.pattern.flags}`;
-  return { name: id, pattern: new RegExp(src, flags), replacement };
+  const rule: RedactionRule = { name: id, pattern: new RegExp(src, flags), replacement };
+  if (cp.allowlist) rule.allowlist = cp.allowlist;
+  if (cp.minEntropy !== undefined) rule.minEntropy = cp.minEntropy;
+  return rule;
 }
 
 // ---- Secrets preset ----
@@ -49,6 +55,18 @@ const SECRETS_RULES: RedactionRule[] = [
   toRule("credential_github", "[GITHUB_TOKEN_REDACTED]"),
   toRule("credential_anthropic", "[ANTHROPIC_KEY_REDACTED]"),
   toRule("credential_openai", "[OPENAI_KEY_REDACTED]"),
+  toRule("credential_gcp_api_key", "[GCP_API_KEY_REDACTED]"),
+  toRule("credential_gcp_service_account", "[GCP_SERVICE_ACCOUNT_REDACTED]"),
+  toRule("credential_gitlab", "[GITLAB_TOKEN_REDACTED]"),
+  toRule("credential_jwt", "[JWT_REDACTED]"),
+  toRule("credential_stripe", "[STRIPE_KEY_REDACTED]"),
+  toRule("credential_slack", "[SLACK_TOKEN_REDACTED]"),
+  toRule("credential_huggingface", "[HUGGINGFACE_TOKEN_REDACTED]"),
+  toRule("credential_databricks", "[DATABRICKS_TOKEN_REDACTED]"),
+  toRule("credential_npm", "[NPM_TOKEN_REDACTED]"),
+  toRule("credential_pypi", "[PYPI_TOKEN_REDACTED]"),
+  toRule("credential_vault", "[VAULT_TOKEN_REDACTED]"),
+  toRule("credential_sendgrid", "[SENDGRID_TOKEN_REDACTED]"),
   // Broader prefix-based catch-all (sk-, pk-, api-, key-, token- prefixed values)
   {
     name: "api-key-prefixed",

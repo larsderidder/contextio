@@ -53,6 +53,7 @@ export {
 // Security patterns: shared regex data for injection detection and credential scanning
 export {
   CREDENTIAL_PATTERNS,
+  shannonEntropy,
   type CredentialPattern,
 } from "./security-patterns.js";
 

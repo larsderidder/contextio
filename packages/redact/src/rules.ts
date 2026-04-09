@@ -23,4 +23,18 @@ export interface RedactionRule {
   context?: string[];
   /** Characters to search around a match for context words. Default: 100. */
   contextWindow?: number;
+  /**
+   * Per-rule allowlist patterns. If any matches the full matched string,
+   * the replacement is suppressed. Carried over from CredentialPattern.allowlist
+   * so detection and redaction stay in sync.
+   *
+   * Anchored patterns (starting with ^) are tested against the first capture
+   * group (m[1]) instead of the full match, mirroring the scanner behaviour.
+   */
+  allowlist?: RegExp[];
+  /**
+   * Minimum Shannon entropy (bits/char) on the first capture group.
+   * Carried over from CredentialPattern.minEntropy via toRule().
+   */
+  minEntropy?: number;
 }

@@ -1037,3 +1037,321 @@ describe("stream rehydration", () => {
     assert.ok(!text.includes("[EMAIL_1]"), `got: ${text}`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// New vendor-specific credential patterns in SECRETS_RULES
+//
+// Tests for gap 1 (8 new patterns missing from SECRETS_RULES) and
+// gap 2 (toRule() drops allowlist, so FP suppression was silently lost).
+//
+// Pattern values and FP cases ported from gitleaks rules (MIT):
+// https://github.com/gitleaks/gitleaks/tree/master/cmd/generate/config/rules
+// ---------------------------------------------------------------------------
+
+describe("secrets preset — new vendor patterns", () => {
+  function redact(text: string): string {
+    const policy = fromPreset("secrets");
+    const stats = createStats();
+    return redactWithPolicy(text, policy, stats) as string;
+  }
+
+  function notRedacted(text: string): boolean {
+    return redact(text) === text;
+  }
+
+  // --- GCP API key ---
+  describe("credential_gcp_api_key", () => {
+    // AIza + exactly 35 word/hyphen chars
+    const key = "AIzaSyC1234567890abcdefghijklmnopqrstuv";
+
+    it("redacts GCP API key", () => {
+      assert.equal(redact(`apiKey=${key}`), "apiKey=[GCP_API_KEY_REDACTED]");
+    });
+
+    it("redacts GCP key in JSON value", () => {
+      assert.equal(
+        redact(`{"key":"${key}"}`),
+        '{"key":"[GCP_API_KEY_REDACTED]"}',
+      );
+    });
+
+    it("does not redact all-same-char placeholder (AIzaaaa...)", () => {
+      // fps from gitleaks gcp.go — no entropy
+      assert.ok(notRedacted('apiKey: "AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'));
+    });
+  });
+
+  // --- GCP service account ---
+  describe("credential_gcp_service_account", () => {
+    it('redacts "type": "service_account" literal', () => {
+      const input = '{"type": "service_account", "project_id": "my-proj"}';
+      assert.ok(redact(input).includes("[GCP_SERVICE_ACCOUNT_REDACTED]"));
+    });
+
+    it("does not redact other type fields", () => {
+      assert.ok(notRedacted('{"type": "oauth2_client"}'));
+    });
+  });
+
+  // --- GitLab PAT ---
+  describe("credential_gitlab", () => {
+    const token = "glpat-abcdefghij1234567890";
+
+    it("redacts glpat- token", () => {
+      assert.equal(
+        redact(`GITLAB_TOKEN=${token}`),
+        "GITLAB_TOKEN=[GITLAB_TOKEN_REDACTED]",
+      );
+    });
+
+    it("does not redact truncated glpat- (too short)", () => {
+      assert.ok(notRedacted("token=glpat-tooshort"));
+    });
+  });
+
+  // --- JWT ---
+  describe("credential_jwt", () => {
+    // Real JWT from gitleaks test suite (gitleaks:allow)
+    const jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
+      ".eyJzdWIiOiJ1c2VybmFtZTpib2IifQ" +
+      ".HcfCW67Uda-0gz54ZWTqmtgJnZeNem0Q757eTa9EZuw";
+
+    it("redacts JWT", () => {
+      const out = redact(`Authorization: Bearer ${jwt}`);
+      assert.ok(out.includes("[JWT_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("eyJ"), `should not expose JWT, got: ${out}`);
+    });
+
+    it("does not redact plain base64", () => {
+      assert.ok(notRedacted("value: aGVsbG8gd29ybGQ="));
+    });
+  });
+
+  // --- Stripe ---
+  describe("credential_stripe", () => {
+    const live = "sk_live_" + "51OuEMLAlTWGaDypq4P5cuDHbuKeG4tAGPYHJpEXQabcde";
+    const rk = "rk_prod_" + "51OuEMLAlTWGaDypquDn9aZigaJOsa9NR1w1BxZXs9abc";
+
+    it("redacts sk_live_ key", () => {
+      assert.equal(
+        redact(`STRIPE_KEY=${live}`),
+        "STRIPE_KEY=[STRIPE_KEY_REDACTED]",
+      );
+    });
+
+    it("redacts rk_prod_ key", () => {
+      assert.equal(
+        redact(`STRIPE_RK=${rk}`),
+        "STRIPE_RK=[STRIPE_KEY_REDACTED]",
+      );
+    });
+
+    it("does not redact task_test_ prefix via the stripe pattern", () => {
+      // fps from gitleaks stripe.go — task_test_ has no sk_/rk_ prefix so
+      // credential_stripe does not fire. credential_generic may still catch it
+      // via the 'token' keyword — that's expected behaviour, not a bug.
+      const policy = fromPreset("secrets");
+      const stats = createStats();
+      const out = redactWithPolicy('nonMatchingToken := "task_test_abcdefghij1234567890"', policy, stats) as string;
+      assert.ok(!out.includes("[STRIPE_KEY_REDACTED]"), `stripe rule should not fire, got: ${out}`);
+    });
+  });
+
+  // --- Slack ---
+  describe("credential_slack", () => {
+    it("redacts xoxb- bot token", () => {
+      const token = ["xoxb", "781236542736", "2364535789652", "GkwFDQoHqzXDVsC6GzqYUypD"].join("-");
+      const out = redact(`bot_token=${token}`);
+      assert.ok(out.includes("[SLACK_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("xoxb"), `got: ${out}`);
+    });
+
+    it("redacts xoxp- user token", () => {
+      const token = ["xoxp", "41684372915", "1320496754", "45609968301", "e708ba56e1517a99f6b5fb07349476ef"].join("-");
+      assert.ok(redact(token).includes("[SLACK_TOKEN_REDACTED]"));
+    });
+
+    it("redacts Slack webhook URL", () => {
+      const url = "https://hooks.slack.com/services/" + "T0DCUJB1Q/B0DD08H5G/bJtrpFi1fO1JMCcwLx8uZyAg";
+      assert.ok(redact(url).includes("[SLACK_TOKEN_REDACTED]"));
+    });
+
+    it("does not redact all-x placeholder", () => {
+      // fps from gitleaks slack.go
+      assert.ok(notRedacted("token=xoxb-xxxxxxxxx-xxxxxxxxxx-xxxxxxxxxxxx"));
+    });
+
+    it("does not redact malformed xoxp- (too few segments) via the slack pattern", () => {
+      // fps from gitleaks slack.go — too few numeric segments for the xox[pe] sub-pattern.
+      // credential_generic may still catch it via the 'token' keyword; that's expected.
+      const policy = fromPreset("secrets");
+      const stats = createStats();
+      const out = redactWithPolicy('"token": "xoxp-1234567890"', policy, stats) as string;
+      assert.ok(!out.includes("[SLACK_TOKEN_REDACTED]"), `slack rule should not fire, got: ${out}`);
+    });
+  });
+
+  // --- HuggingFace ---
+  describe("credential_huggingface", () => {
+    it("redacts hf_ access token", () => {
+      const token = "hf_" + "jCBaQngSHiHDRYOcsMcifUcysGyaiybUWz";
+      const out = redact(`HF_TOKEN=${token}`);
+      assert.ok(out.includes("[HUGGINGFACE_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("hf_"), `got: ${out}`);
+    });
+
+    it("redacts api_org_ token", () => {
+      const token = "api_org_" + "PsvVHMtfecsbsdScIMRjhReQYUBOZqOJTs";
+      assert.ok(redact(token).includes("[HUGGINGFACE_TOKEN_REDACTED]"));
+    });
+
+    it("does not redact all-x placeholder", () => {
+      // fps from gitleaks huggingface.go
+      assert.ok(notRedacted("HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"));
+    });
+
+    it("does not redact hf_ in ObjC method name", () => {
+      assert.ok(notRedacted("- (id)hf_requiredCharacteristicTypesForDisplayMetadata;"));
+    });
+  });
+
+  // --- Databricks ---
+  describe("credential_databricks", () => {
+    it("redacts dapi token", () => {
+      const token = "dapi" + "f13ac4b49d1cb31f69f678e39602e381";
+      const out = redact(`token = ${token}-2`);
+      assert.ok(out.includes("[DATABRICKS_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("dapi"), `got: ${out}`);
+    });
+
+    it("does not redact malformed dapi token via the databricks pattern", () => {
+      // fps from gitleaks databricks.go — 'g' is not a hex char so [a-f0-9]{32} fails.
+      // credential_generic may still catch it via the 'token' keyword; that's expected.
+      const policy = fromPreset("secrets");
+      const stats = createStats();
+      const out = redactWithPolicy("DATABRICKS_TOKEN=dapi123456789012345678a9bc01234defg5", policy, stats) as string;
+      assert.ok(!out.includes("[DATABRICKS_TOKEN_REDACTED]"), `databricks rule should not fire, got: ${out}`);
+    });
+  });
+
+  // --- allowlist propagation (gap 2) ---
+  // Verifies toRule() carries allowlist through to the redaction engine,
+  // so FP suppression rules in CredentialPattern are not silently dropped.
+  describe("allowlist propagation from CredentialPattern", () => {
+    it("does not redact GCP placeholder through the redact engine", () => {
+      // This would fire without allowlist propagation
+      assert.ok(notRedacted("apiKey: AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    });
+
+    it("does not redact all-x Slack placeholder through the redact engine", () => {
+      assert.ok(notRedacted("xoxb-xxxxxxxxx-xxxxxxxxxx-xxxxxxxxxxxx"));
+    });
+
+    it("does not redact all-x HuggingFace placeholder through the redact engine", () => {
+      assert.ok(notRedacted("HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap 5: entropy gate — credential_generic must not fire on low-entropy values
+// ---------------------------------------------------------------------------
+
+describe("secrets preset — entropy gate on credential_generic", () => {
+  function credentialGenericFires(text: string): boolean {
+    const policy = fromPreset("secrets");
+    const stats = createStats();
+    const out = redactWithPolicy(text, policy, stats) as string;
+    return out !== text && stats.byRule["credential_generic"] > 0;
+  }
+
+  it("does not redact all-same-digit value (entropy = 0)", () => {
+    assert.ok(!credentialGenericFires("api_token=11111111111111111111111"));
+  });
+
+  it("does not redact nearly-all-same value (entropy ≈ 0.25)", () => {
+    assert.ok(!credentialGenericFires("api_token=aaaa1aaaaaaaaaaaaaaaaaaa"));
+  });
+
+  it("still redacts high-entropy generic secret", () => {
+    assert.ok(credentialGenericFires("api_token=xK9mP2nR4qL7vB3c1wZ5yXa8bN"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap 6: npm, PyPI, Vault, SendGrid patterns in secrets preset
+// ---------------------------------------------------------------------------
+
+describe("secrets preset — npm, PyPI, Vault, SendGrid", () => {
+  function redact(text: string): string {
+    const policy = fromPreset("secrets");
+    const stats = createStats();
+    return redactWithPolicy(text, policy, stats) as string;
+  }
+
+  describe("npm (credential_npm)", () => {
+    it("redacts npm_ token", () => {
+      const out = redact("NPM_TOKEN=npm_abcdefghij1234567890ABCDEF1234567890");
+      assert.ok(out.includes("[NPM_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("npm_"), `should not expose token, got: ${out}`);
+    });
+
+    it("does not redact short npm_ token", () => {
+      const text = "npm_tooshort";
+      assert.equal(redact(text), text);
+    });
+  });
+
+  describe("PyPI (credential_pypi)", () => {
+    const token = "pypi-AgEIcHlwaS5vcmc" + "a1b2c3d4".repeat(8);
+
+    it("redacts pypi- upload token", () => {
+      const out = redact(`PYPI_TOKEN=${token}`);
+      assert.ok(out.includes("[PYPI_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("pypi-"), `should not expose token, got: ${out}`);
+    });
+  });
+
+  describe("HashiCorp Vault (credential_vault)", () => {
+    it("redacts hvs. service token", () => {
+      const token = "hvs." + "CAESIP2jTxc9S2K7Z6CtcFWQv7-044m_oSsxnPE1H3nF89l3GiYKHGh2cy5sQmlIZVNyTWJNcDRsYWJpQjlhYjVlb1cQh6PL8wE";
+      const out = redact(`VAULT_TOKEN=${token}`);
+      assert.ok(out.includes("[VAULT_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("hvs."), `should not expose token, got: ${out}`);
+    });
+
+    it("redacts hvb. batch token", () => {
+      const token =
+        "hvb." +
+        "AAAAAQJgxDgqsGNorpoOR7hPZ5SU-ynBvCl764jyRP_fnX7WvkdkDzGjbLNGdPdtlY33Als2P36yDZueqzfdGw9RsaTeaYXSH7E4RYSWuRoQ9YRKIw8o7mDDY2ZcT3KOB7RwtW1w1FN2eDqcy_sbCjXPaM1iBVH-mqMSYRmRd2nb5D1SJPeBzIYRqSglLc31wUGN7xEzyrKUczqOKsIcybQA";
+      const out = redact(token);
+      assert.ok(out.includes("[VAULT_TOKEN_REDACTED]"), `got: ${out}`);
+    });
+
+    it("does not redact s. all-lowercase (low entropy)", () => {
+      const text = "s.thisstringisalllowercase";
+      assert.equal(redact(text), text);
+    });
+
+    it("does not redact hvs. all-x placeholder", () => {
+      const text = "hvs.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+      assert.equal(redact(text), text);
+    });
+  });
+
+  describe("SendGrid (credential_sendgrid)", () => {
+    const token = "SG." + "aBcDeFgH1234".repeat(5) + "aBcDeF";
+
+    it("redacts SG. token", () => {
+      const out = redact(`SENDGRID_API_KEY=${token}`);
+      assert.ok(out.includes("[SENDGRID_TOKEN_REDACTED]"), `got: ${out}`);
+      assert.ok(!out.includes("SG."), `should not expose token, got: ${out}`);
+    });
+
+    it("does not redact short SG. token", () => {
+      const text = "SG.tooshort";
+      assert.equal(redact(text), text);
+    });
+  });
+});
