@@ -119,7 +119,7 @@ describe("runMonitor listing", () => {
 
     const out = await captureConsole(() =>
       // session filter with no matches exits cleanly after printing header
-      runMonitor({ command: "monitor", session: "nosuchsession", last: null, source: null }),
+      runMonitor({ command: "monitor", session: "nosuchsession", last: null, source: null, once: true }),
     );
 
     assert.ok(out.includes("TIME"), `header missing in: ${out}`);
@@ -135,7 +135,7 @@ describe("runMonitor listing", () => {
     const { runMonitor } = await import("../dist/monitor.js");
 
     const out = await captureConsole(() =>
-      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null }),
+      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null, once: true }),
     );
 
     assert.ok(out.includes("claude"), `source missing in: ${out}`);
@@ -151,7 +151,7 @@ describe("runMonitor listing", () => {
     const { runMonitor } = await import("../dist/monitor.js");
 
     const out = await captureConsole(() =>
-      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: "claude" }),
+      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: "claude", once: true }),
     );
 
     assert.ok(out.includes("claude"), `claude missing in: ${out}`);
@@ -166,7 +166,7 @@ describe("runMonitor listing", () => {
     const { runMonitor } = await import("../dist/monitor.js");
 
     const out = await captureConsole(() =>
-      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null }),
+      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null, once: true }),
     );
 
     assert.ok(out.includes("Requests:"), `totals line missing in: ${out}`);
@@ -178,7 +178,7 @@ describe("runMonitor listing", () => {
     const { runMonitor } = await import("../dist/monitor.js");
 
     const out = await captureConsole(() =>
-      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null }),
+      runMonitor({ command: "monitor", session: "aabb0011", last: null, source: null, once: true }),
     );
 
     // timings.total_ms = 211 → "211ms"

@@ -221,6 +221,8 @@ export async function runMonitor(args: MonitorArgs): Promise<void> {
     console.log("\nWatching for new captures... (Ctrl-C to exit)\n");
   }
 
+  if (args.once) return;
+
   const watched = new Set<string>();
   let watcher: fs.FSWatcher | null = null;
 

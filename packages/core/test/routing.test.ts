@@ -211,6 +211,13 @@ describe("extractSource", () => {
     assert.equal(result.source, null);
   });
 
+  it("returns null for codex backend path segment", () => {
+    const result = extractSource("/codex/responses");
+    assert.equal(result.source, null);
+    assert.equal(result.sessionId, null);
+    assert.equal(result.cleanPath, "/codex/responses");
+  });
+
   it("extracts source from root path as null", () => {
     const result = extractSource("/");
     assert.equal(result.source, null);

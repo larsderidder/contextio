@@ -53,6 +53,8 @@ export interface MonitorArgs {
   /** Duration filter like "1h", "30m". Show recent captures then watch. */
   last: string | null;
   source: string | null;
+  /** Test hook: render existing captures and return without starting fs.watch. */
+  once?: boolean;
 }
 
 /** Parsed arguments for `ctxio inspect`. */
