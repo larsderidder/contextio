@@ -25,11 +25,11 @@ importers:
         version: link:packages/redact
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       turbo:
-        specifier: ^2
-        version: 2.8.8
+        specifier: ^2.10.4
+        version: 2.10.4
       typescript:
         specifier: ^5.7
         version: 5.9.3
@@ -53,8 +53,8 @@ importers:
         version: 13.1.0
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
@@ -62,8 +62,8 @@ importers:
   packages/core:
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
@@ -75,8 +75,8 @@ importers:
         version: link:../core
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
@@ -88,8 +88,8 @@ importers:
         version: link:../core
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
@@ -101,53 +101,53 @@ importers:
         version: link:../core
     devDependencies:
       '@types/node':
-        specifier: ^22
-        version: 22.19.11
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
 
 packages:
 
-  '@types/node@22.19.11':
-    resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
+  '@turbo/darwin-64@2.10.4':
+    resolution: {integrity: sha512-m1MUEI4MJ69r5CwfMYxmHi0H0rrgiYCBOp0tgBZ9x/YVvOb5uu/lRIDyDwdtH054R2yWeQaIigUGu6aCX9f8cA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@turbo/darwin-arm64@2.10.4':
+    resolution: {integrity: sha512-VQ1Yxs5zkPT+2z7t1P4mvn6JmcKLkOCAsPuK9XbOvuVj0DlTlETfIXNisX0771v/vTWHOQqiwoGi+TtAUq8efw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@turbo/linux-64@2.10.4':
+    resolution: {integrity: sha512-IzV1QovmwX7mfGnVinmE++2IB8tbeo38weltiuH5zNqwCTBjLs/DytyRKx+bmnhHdXIq9SheR8p0Nip/LBUPHg==}
+    cpu: [x64]
+    os: [linux]
+
+  '@turbo/linux-arm64@2.10.4':
+    resolution: {integrity: sha512-rfujSQkP5aYiRn0PgTM7F00WkJCP/bKDVZbOx3WmrZwa/vHA0bplhCl328kpX7VI9HH2vI90ISGwuSVgJgoqTw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@turbo/windows-64@2.10.4':
+    resolution: {integrity: sha512-NnspP7Wd5fa3Wwnqv9bKfhegqZzuHBgbPxdZU/idTLQcazx/vgKu95JlCx2YHY0hdvKCnPcARrDwM+KEUmaO7A==}
+    cpu: [x64]
+    os: [win32]
+
+  '@turbo/windows-arm64@2.10.4':
+    resolution: {integrity: sha512-Iv02YgOpaEShc2OkG7mgCJ2pEw1RUKiKbs0h8W5wAf4jZ5vpmraTEjuGTgHRuOORQnC1GN3KHo5WB+hu1abRMA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@types/node@22.20.1':
+    resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
   commander@13.1.0:
     resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
     engines: {node: '>=18'}
 
-  turbo-darwin-64@2.8.8:
-    resolution: {integrity: sha512-7R/XRAleyNB8nIJuenRpS7EnmCM/kYFgcG1rW3F5DF57Nl4WyBO3DzxqwooRheuoXDD1UsJvDse0yRufgxjClA==}
-    cpu: [x64]
-    os: [darwin]
-
-  turbo-darwin-arm64@2.8.8:
-    resolution: {integrity: sha512-whpveO0w/dMcgQ0zFrzqK76mG2W+RBQ/pKIpW+sEvNr+T4UcYd2gZpfV2euehJLvdeFErWgW74dIt/MFfkG1bA==}
-    cpu: [arm64]
-    os: [darwin]
-
-  turbo-linux-64@2.8.8:
-    resolution: {integrity: sha512-BISkcKk+5/Dh11q+YhdQIGONXmdlQ6LY0iQ+GBIK7QOBAJyJFKmKvUeAeMdWGXOa3sImz2oZ6u2StyR+0Y/VVA==}
-    cpu: [x64]
-    os: [linux]
-
-  turbo-linux-arm64@2.8.8:
-    resolution: {integrity: sha512-B+DQWWtM3O+AexFF4aYucT0MvvnQOW4n5y9LA5h3Zc3Lpj10yl9K4dEBzJvMVQ2jTkCRNAvA8q9G3EjqmGmGGA==}
-    cpu: [arm64]
-    os: [linux]
-
-  turbo-windows-64@2.8.8:
-    resolution: {integrity: sha512-KP5TRVrmVnrxDyvERvQq7VXu+h5AiEiBwyr90YsRuYy/Z5zLz8hrNZXejTyUR17xmnuI+RbUSxrQlfmPnxiW1A==}
-    cpu: [x64]
-    os: [win32]
-
-  turbo-windows-arm64@2.8.8:
-    resolution: {integrity: sha512-X45sTOksR8iidk+PZUXpNcfEkOhGCTS2p2J8nSUExr1v7u3T4FixwplzliuWmG7QTPGJapAwItzHbi+d/9ckNQ==}
-    cpu: [arm64]
-    os: [win32]
-
-  turbo@2.8.8:
-    resolution: {integrity: sha512-wP+axjWAKzYfZ7bghuggVST9bX4j5cn3NPMU9NPQqtwaUKL9n9JOnWWBIc9gdrEma1aViYR73EoPjDEpVq+liQ==}
+  turbo@2.10.4:
+    resolution: {integrity: sha512-GQpduILaKjoaGljw097ScsSyKTtZSY7cZ3bJktzfTkPMyCf3ShKLuXK2IaOEN2Plziml+ArR7WJ1m+V4VbnaKQ==}
     hasBin: true
 
   typescript@5.9.3:
@@ -160,38 +160,38 @@ packages:
 
 snapshots:
 
-  '@types/node@22.19.11':
+  '@turbo/darwin-64@2.10.4':
+    optional: true
+
+  '@turbo/darwin-arm64@2.10.4':
+    optional: true
+
+  '@turbo/linux-64@2.10.4':
+    optional: true
+
+  '@turbo/linux-arm64@2.10.4':
+    optional: true
+
+  '@turbo/windows-64@2.10.4':
+    optional: true
+
+  '@turbo/windows-arm64@2.10.4':
+    optional: true
+
+  '@types/node@22.20.1':
     dependencies:
       undici-types: 6.21.0
 
   commander@13.1.0: {}
 
-  turbo-darwin-64@2.8.8:
-    optional: true
-
-  turbo-darwin-arm64@2.8.8:
-    optional: true
-
-  turbo-linux-64@2.8.8:
-    optional: true
-
-  turbo-linux-arm64@2.8.8:
-    optional: true
-
-  turbo-windows-64@2.8.8:
-    optional: true
-
-  turbo-windows-arm64@2.8.8:
-    optional: true
-
-  turbo@2.8.8:
+  turbo@2.10.4:
     optionalDependencies:
-      turbo-darwin-64: 2.8.8
-      turbo-darwin-arm64: 2.8.8
-      turbo-linux-64: 2.8.8
-      turbo-linux-arm64: 2.8.8
-      turbo-windows-64: 2.8.8
-      turbo-windows-arm64: 2.8.8
+      '@turbo/darwin-64': 2.10.4
+      '@turbo/darwin-arm64': 2.10.4
+      '@turbo/linux-64': 2.10.4
+      '@turbo/linux-arm64': 2.10.4
+      '@turbo/windows-64': 2.10.4
+      '@turbo/windows-arm64': 2.10.4
 
   typescript@5.9.3: {}
 
