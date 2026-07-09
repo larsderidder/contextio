@@ -53,16 +53,20 @@ COPY --from=build /app/packages/logger/dist ./node_modules/@contextio/logger/dis
 COPY --from=build /app/packages/redact/package.json ./node_modules/@contextio/redact/package.json
 COPY --from=build /app/packages/redact/dist ./node_modules/@contextio/redact/dist
 
-RUN echo 'import { createLoggerPlugin } from "@contextio/logger";\n\
-const captureDir = process.env.LOGGER_CAPTURE_DIR;\n\
-const maxSessions = process.env.LOGGER_MAX_SESSIONS ? parseInt(process.env.LOGGER_MAX_SESSIONS, 10) : 0;\n\
-export default () => createLoggerPlugin({ captureDir, maxSessions });' > /app/logger-plugin.js && \
-    echo 'import { createRedactPlugin } from "@contextio/redact";\n\
-const preset = process.env.REDACT_PRESET || "pii";\n\
-const reversible = process.env.REDACT_REVERSIBLE === "true";\n\
-const policyFile = process.env.REDACT_POLICY_FILE;\n\
-const config = policyFile ? { policyFile, reversible } : { preset, reversible };\n\
-export default () => createRedactPlugin(config);' > /app/redact-plugin.js
+RUN printf '%s\n' \
+    'import { createLoggerPlugin } from "@contextio/logger";' \
+    'const captureDir = process.env.LOGGER_CAPTURE_DIR;' \
+    'const maxSessions = process.env.LOGGER_MAX_SESSIONS ? parseInt(process.env.LOGGER_MAX_SESSIONS, 10) : 0;' \
+    'export default () => createLoggerPlugin({ captureDir, maxSessions });' \
+    > /app/logger-plugin.js && \
+    printf '%s\n' \
+    'import { createRedactPlugin } from "@contextio/redact";' \
+    'const preset = process.env.REDACT_PRESET || "pii";' \
+    'const reversible = process.env.REDACT_REVERSIBLE === "true";' \
+    'const policyFile = process.env.REDACT_POLICY_FILE;' \
+    'const config = policyFile ? { policyFile, reversible } : { preset, reversible };' \
+    'export default () => createRedactPlugin(config);' \
+    > /app/redact-plugin.js
 
 USER node
 EXPOSE 4040
