@@ -599,6 +599,8 @@ export { detectorRegistry, registerDetector, createDetector } from "./detector.j
 export type { RuleDetectorConfig } from "./ruleDetector.js";
 export { RuleDetector, createRuleDetector } from "./ruleDetector.js";
 export type { GlinerOnnxConfig } from "./glinerDetector.js";
+export type { PresidioTsConfig } from "./presidioTsDetector.js";
+export { PresidioTsDetector, createPresidioTsDetector } from "./presidioTsDetector.js";
 
 // Lazy export for GLiNER detector to avoid loading onnxruntime-node in environments
 // where native modules are not available (e.g., Next.js static generation on Alpine)
