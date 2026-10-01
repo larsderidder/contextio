@@ -1,6 +1,6 @@
 {
   "name": "@contextio/logger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Capture-to-disk plugin for @contextio/core proxy",
   "license": "MIT",
   "type": "module",
@@ -39,7 +39,7 @@
     "@contextio/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
-    "typescript": "^5.7"
+    "@types/node": "^22.20.4",
+    "typescript": "^7.0.2"
   }
 }

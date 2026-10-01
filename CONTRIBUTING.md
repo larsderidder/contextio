@@ -19,3 +19,11 @@ pnpm install
 pnpm build
 pnpm test
 ```
+
+## Releasing
+
+Bump changed packages and their workspace dependents, then update the lockfile and run the tests. Commit and push to `main` before creating an annotated `v{version}` tag at that commit.
+
+Pushing the version tag publishes the npm packages and versioned Docker images through GitHub Actions. A GitHub Release is optional; publishing one also runs the npm workflow. Runs for the same tag are serialized, and already-published package versions are skipped.
+
+Verify publication before updating consumers. In particular, Context Lens must install published `@contextio/*` packages, not rely on unpublished local changes.

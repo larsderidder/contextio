@@ -5,7 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "build:test": "turbo build && tsc -p tsconfig.test.json",
-    "test": "pnpm run build:test && node --test 'dist-test/**/*.test.js'",
+    "test": "pnpm run build:test && node --test 'dist-test/**/*.test.js' && pnpm -r test",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "clean": "turbo clean"
@@ -18,9 +18,9 @@
     "@contextio/redact": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
-    "turbo": "^2.10.4",
-    "typescript": "^5.7"
+    "@types/node": "^22.20.4",
+    "turbo": "^2.11.6",
+    "typescript": "^7.0.2"
   },
-  "packageManager": "pnpm@9.15.4"
+  "packageManager": "pnpm@9.15.9"
 }
