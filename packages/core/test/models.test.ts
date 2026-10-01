@@ -13,7 +13,7 @@ describe("models.ts", () => {
   describe("getContextLimit", () => {
     it("returns exact match for claude models", () => {
       assert.equal(getContextLimit("claude-opus-4-20250514"), 200000);
-      assert.equal(getContextLimit("claude-sonnet-4-20250514"), 1000000);
+      assert.equal(getContextLimit("claude-sonnet-4-20250514"), 200000);
       assert.equal(getContextLimit("claude-haiku-4-20250320"), 200000);
     });
 
@@ -29,6 +29,37 @@ describe("models.ts", () => {
       assert.equal(getContextLimit("gpt-4-turbo-2024-04-09"), 128000);
       assert.equal(getContextLimit("gpt-4"), 8192);
       assert.equal(getContextLimit("gpt-3.5-turbo-0125"), 16385);
+    });
+
+    it("returns total GPT-5 windows rather than reserved input budgets", () => {
+      // Each model's OpenAI documentation specifies a 400k context window.
+      const models = [
+        "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-pro", "gpt-5-codex",
+        "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max",
+        "gpt-5.2", "gpt-5.2-pro", "gpt-5.2-codex", "gpt-5.3-codex",
+      ];
+      for (const model of models) {
+        assert.equal(getContextLimit(model), 400000, model);
+      }
+    });
+
+    it("keeps Chat variant windows separate from reasoning models", () => {
+      assert.equal(getContextLimit("openai/gpt-5-chat-latest"), 128000);
+      assert.equal(getContextLimit("gpt-5.1-chat-latest"), 128000);
+      assert.equal(getContextLimit("gpt-5.2-chat-latest"), 128000);
+    });
+
+    it("distinguishes Claude point releases and provider prefixes", () => {
+      assert.equal(getContextLimit("anthropic/claude-sonnet-4.5"), 200000);
+      assert.equal(getContextLimit("claude-sonnet-4-6"), 1000000);
+      assert.equal(getContextLimit("claude-opus-4-6-20251101"), 1000000);
+      assert.equal(getContextLimit("claude-sonnet-4-latest"), 200000);
+    });
+
+    it("uses documented MiniMax windows and recognizes native IDs", () => {
+      assert.equal(getContextLimit("MiniMax-M2.5"), 204800);
+      assert.equal(getContextLimit("minimax/MiniMax-M2.5-highspeed"), 204800);
+      assert.equal(getContextLimit("minimax-m2.5-fast"), 204800);
     });
 
     it("returns exact match for o-series models", () => {
@@ -50,6 +81,12 @@ describe("models.ts", () => {
     it("returns default for unknown models", () => {
       assert.equal(getContextLimit("unknown-model"), 128000);
       assert.equal(getContextLimit(""), 128000);
+    });
+
+    it("does not borrow a window from a different model variant", () => {
+      for (const model of ["gpt-5.4", "claude-opus-4.99", "gpt-4o-fake", "my-gpt-4o-model"]) {
+        assert.equal(getContextLimit(model), 128000, model);
+      }
     });
   });
 
@@ -75,6 +112,12 @@ describe("models.ts", () => {
     it("contains minimax models", () => {
       assert.ok(MODEL_PRICING["minimax-m2.5"]);
       assert.ok(MODEL_PRICING["minimax-m2.5-fast"]);
+    });
+
+    it("uses direct-provider MiniMax pricing and preserves the fast alias", () => {
+      assert.deepEqual(MODEL_PRICING["minimax-m2.5"], [0.3, 1.2]);
+      assert.deepEqual(MODEL_PRICING["minimax-m2.5-highspeed"], [0.6, 2.4]);
+      assert.deepEqual(MODEL_PRICING["minimax-m2.5-fast"], [0.6, 2.4]);
     });
   });
 
@@ -120,12 +163,32 @@ describe("models.ts", () => {
       assert.equal(cost, null);
     });
 
+    it("does not assign base-model pricing to unknown variants", () => {
+      for (const model of ["gpt-5.4", "claude-opus-4.99", "gpt-4o-fake", "my-gpt-4o-model", "gpt-5-preview"]) {
+        assert.equal(estimateCost(model, 1000, 500), null, model);
+      }
+    });
+
+    it("charges native MiniMax IDs at the correct base and highspeed rates", () => {
+      assert.equal(estimateCost("minimax/MiniMax-M2.5", 1_000_000, 0), 0.3);
+      assert.equal(estimateCost("MiniMax-M2.5", 0, 1_000_000), 1.2);
+      assert.equal(estimateCost("MiniMax-M2.5-highspeed", 1_000_000, 0), 0.6);
+      assert.equal(estimateCost("minimax-m2.5-fast", 0, 1_000_000), 2.4);
+    });
+
+    it("uses the same absolute MiniMax cache rates for both speed variants", () => {
+      for (const model of ["MiniMax-M2.5", "MiniMax-M2.5-highspeed", "minimax-m2.5-fast"]) {
+        assert.equal(estimateCost(model, 0, 0, 1_000_000, 0), 0.03);
+        assert.equal(estimateCost(model, 0, 0, 0, 1_000_000), 0.375);
+      }
+    });
+
     it("handles zero tokens", () => {
       const cost = estimateCost("claude-sonnet-4", 0, 0);
       assert.equal(cost, 0);
     });
 
-    it("uses substring matching for model names", () => {
+    it("recognizes model date snapshots", () => {
       const cost = estimateCost("claude-opus-4-20250514", 1000, 500);
       assert.ok(cost !== null);
     });
@@ -152,7 +215,7 @@ describe("models.ts", () => {
   describe("CONTEXT_LIMITS", () => {
     it("has expected entries", () => {
       assert.equal(CONTEXT_LIMITS["claude-opus-4"], 200000);
-      assert.equal(CONTEXT_LIMITS["claude-sonnet-4"], 1000000);
+      assert.equal(CONTEXT_LIMITS["claude-sonnet-4"], 200000);
       assert.equal(CONTEXT_LIMITS["gpt-4o"], 128000);
       assert.equal(CONTEXT_LIMITS["o1"], 200000);
       assert.equal(CONTEXT_LIMITS["gemini-1.5-pro"], 2097152);

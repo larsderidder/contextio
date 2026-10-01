@@ -45,9 +45,15 @@ const source = extractSource(url); // /claude/v1/messages -> "claude"
 ```typescript
 import { estimateCost, getContextLimit, MODEL_PRICING } from '@contextio/core';
 
-const cost = estimateCost('claude-sonnet-4-20250514', { inputTokens: 1000, outputTokens: 500 });
+const cost = estimateCost('claude-sonnet-4-20250514', 1000, 500);
 const limit = getContextLimit('gpt-4o');
 ```
+
+`getContextLimit()` returns the provider-advertised total context window, not the maximum input or output budget. It is not a request-fit validator. Unknown models return a heuristic fallback. Model IDs accept provider prefixes and date snapshots; an unknown model variant does not inherit a base model's pricing.
+
+`estimateCost()` uses standard direct-provider text rates. It does not account for batch discounts, long-context price tiers, regional or service-tier premiums, tool fees, or cache storage. Provider documentation is authoritative; source links live beside the tables in [`src/models.ts`](src/models.ts). Historical values remain available for retired models.
+
+Cache estimates currently cover Anthropic's five-minute writes, a legacy Gemini approximation, and MiniMax M2.5 rates. Other cache rates are omitted; these costs are estimates, not invoice calculations.
 
 ### Token estimation
 
@@ -57,12 +63,14 @@ import { estimateTokens, countImageBlocks } from '@contextio/core';
 const tokens = estimateTokens(requestBody);
 ```
 
+This is a rough, model-independent estimate, not exact tokenization. Text uses JavaScript string length divided by four. Images use a fixed fallback because the estimator does not inspect dimensions or model-specific vision rules. Language, structured data, and chat/tool overhead can materially change the actual count. Use provider-reported response usage for actual request totals, not this estimate.
+
 ### Response parsing
 
 ```typescript
 import { parseResponseUsage, parseStreamingTokens } from '@contextio/core';
 
-const usage = parseResponseUsage(responseBody, 'anthropic');
+const usage = parseResponseUsage(responseBody);
 ```
 
 ### Security scanning

@@ -1,10 +1,16 @@
 /**
  * Token estimation utilities.
  *
- * Provides image-aware token counting that handles:
- * - Plain text: ceil(chars / 4)
- * - Image content blocks: fixed ~1600 tokens per image
- * - Structured objects: strips base64 before counting
+ * This is a heuristic, not a model-specific tokenizer:
+ * - Plain text: ceil(JavaScript string length / 4)
+ * - Image content blocks: fixed fallback of 1600 tokens per image
+ * - Structured objects: strips base64 before estimating JSON text
+ *
+ * The four-character rule is a rough text approximation, not an accuracy bound:
+ * https://ai.google.dev/gemini-api/docs/tokens
+ * OpenAI describes an average of four bytes, which is not JavaScript string length:
+ * https://github.com/openai/tiktoken
+ * Prefer provider-reported usage for actual request totals.
  */
 
 // ----------------------------------------------------------------------------
@@ -12,12 +18,14 @@
 // ----------------------------------------------------------------------------
 
 /**
- * Approximate token cost for a single image.
+ * Fallback token estimate for an image with unknown dimensions and model.
  *
- * Anthropic charges based on image dimensions (~1,600 tokens per 512x512 tile).
- * Since we don't decode image data, we use a conservative flat estimate of 1,600
- * tokens (one tile). Most screenshots cost 2,000-6,400 tokens, so this slightly
- * under-counts but is far better than stringifying megabytes of base64.
+ * This constant is not a provider billing rule or a conservative upper bound.
+ * We do not decode dimensions, inspect resolution settings, or run a vision tokenizer.
+ * Providers use different model-specific patch/tile rules:
+ * https://platform.claude.com/docs/en/build-with-claude/vision
+ * https://developers.openai.com/api/docs/guides/images-vision
+ * https://ai.google.dev/gemini-api/docs/tokens
  */
 export const IMAGE_TOKEN_ESTIMATE = 1_600;
 
@@ -115,8 +123,10 @@ function countImages(val: unknown): number {
 /**
  * Lightweight token estimator.
  *
- * Approximates tokens as `ceil(chars / 4)`. For image content blocks,
- * uses a fixed per-image estimate instead of stringifying base64 data.
+ * Approximates text as `ceil(string.length / 4)` using UTF-16 code units.
+ * Accuracy varies by language, encoding, and content; chat/tool overhead is not modeled.
+ * Images use a fixed fallback instead of counting base64 characters.
+ * Do not use this estimate to enforce a model's input or context limits.
  *
  * @param text - Value to estimate tokens for. Objects are stringified as JSON.
  * @returns Estimated token count (>= 0).
