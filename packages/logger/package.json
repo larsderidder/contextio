@@ -1,6 +1,6 @@
 {
   "name": "@contextio/logger",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Capture-to-disk plugin for @contextio/core proxy",
   "license": "MIT",
   "type": "module",
