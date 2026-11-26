@@ -49,6 +49,24 @@ describe("models.ts", () => {
       assert.equal(getContextLimit("gpt-5.2-chat-latest"), 128000);
     });
 
+    it("distinguishes GPT-6 API windows from Codex subscription windows", () => {
+      assert.equal(getContextLimit("gpt-6.1-sol"), 1050000);
+      assert.equal(getContextLimit("gpt-6.1-sol", "openai"), 1050000);
+      assert.equal(getContextLimit("gpt-6.1-sol", "chatgpt"), 500000);
+      assert.equal(getContextLimit("openai/gpt-6.1-sol-latest", "chatgpt"), 500000);
+      for (const model of ["gpt-6.2-sol", "gpt-6.2-astra"]) {
+        assert.equal(getContextLimit(model, "openai"), 1050000);
+        assert.equal(getContextLimit(model, "chatgpt"), 1000000);
+      }
+    });
+
+    it("does not apply Codex limits to unknown variants or other providers", () => {
+      assert.equal(getContextLimit("gpt-6.1-sol-fake", "chatgpt"), 256000);
+      assert.equal(getContextLimit("gpt-6.1-sol", "custom"), 1050000);
+      assert.equal(getContextLimit("gpt-4o", "chatgpt"), 128000);
+      assert.equal(getContextLimit("unknown-model", "chatgpt"), 256000);
+    });
+
     it("distinguishes Claude point releases and provider prefixes", () => {
       assert.equal(getContextLimit("anthropic/claude-sonnet-4.5"), 200000);
       assert.equal(getContextLimit("claude-sonnet-4-6"), 1000000);
@@ -79,13 +97,13 @@ describe("models.ts", () => {
     });
 
     it("returns default for unknown models", () => {
-      assert.equal(getContextLimit("unknown-model"), 128000);
-      assert.equal(getContextLimit(""), 128000);
+      assert.equal(getContextLimit("unknown-model"), 256000);
+      assert.equal(getContextLimit(""), 256000);
     });
 
     it("does not borrow a window from a different model variant", () => {
       for (const model of ["gpt-5.4", "claude-opus-4.99", "gpt-4o-fake", "my-gpt-4o-model"]) {
-        assert.equal(getContextLimit(model), 128000, model);
+        assert.equal(getContextLimit(model), 256000, model);
       }
     });
   });
@@ -102,6 +120,12 @@ describe("models.ts", () => {
       assert.ok(MODEL_PRICING["gpt-4o"]);
       assert.ok(MODEL_PRICING["gpt-4o-mini"]);
       assert.ok(MODEL_PRICING["o1"]);
+    });
+
+    it("includes documented standard GPT-6 rates", () => {
+      assert.deepEqual(MODEL_PRICING["gpt-6.1-sol"], [2, 10]);
+      assert.deepEqual(MODEL_PRICING["gpt-6.2-sol"], [2, 10]);
+      assert.deepEqual(MODEL_PRICING["gpt-6.2-astra"], [8, 40]);
     });
 
     it("contains gemini models", () => {
@@ -132,6 +156,13 @@ describe("models.ts", () => {
       // gpt-4o: $2.5/M input, $10/M output
       const cost = estimateCost("gpt-4o-20240513", 1000, 500);
       assert.equal(cost, 0.0075); // (1000*2.5 + 500*10) / 1M = 0.0075
+    });
+
+    it("includes standard GPT-6 cached reads and writes", () => {
+      for (const model of ["gpt-6.1-sol", "openai/gpt-6.2-sol-latest"]) {
+        assert.equal(estimateCost(model, 1000, 1000, 1000, 1000), 0.0146);
+      }
+      assert.equal(estimateCost("gpt-6.2-astra", 1000, 1000, 1000, 1000), 0.0584);
     });
 
     it("calculates cost for o1 models", () => {

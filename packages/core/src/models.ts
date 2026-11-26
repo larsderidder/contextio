@@ -1,8 +1,8 @@
 /**
- * Model pricing and context limits for Anthropic, OpenAI, Google, and MiniMax.
+ * Model pricing and context limits for supported LLM providers.
  *
- * Context limits describe the provider-advertised total window, not a reserved
- * input budget or the maximum output. They do not validate whether a request fits.
+ * Context limits retain provider-advertised windows (Google publishes input caps).
+ * They are not reserved input budgets and do not validate whether a request fits.
  * Provider documentation is authoritative; catalogs are comparison aids only.
  *
  * Sources for updated entries, checked 2026-10-01:
@@ -14,6 +14,8 @@
  * - Google prices: https://ai.google.dev/gemini-api/docs/pricing
  * - MiniMax windows: https://platform.minimax.io/docs/api-reference/text-anthropic-api
  * - MiniMax prices: https://platform.minimax.io/docs/pricing/overview
+ * - New model catalog: https://models.dev/api.json (pinned subset in test/fixtures/model-catalog.json)
+ * - Z.AI pricing: https://docs.z.ai/guides/overview/pricing
  *
  * Historical entries from OpenRouter and LiteLLM are retained for retired models:
  * https://openrouter.ai/models
@@ -26,12 +28,20 @@
 // ----------------------------------------------------------------------------
 
 /**
- * Provider-advertised context windows in tokens, including input and output.
+ * Provider-advertised context windows; Google entries retain input caps.
  *
  * Input and output caps are separate constraints; neither is subtracted here.
  */
 export const CONTEXT_LIMITS: Record<string, number> = {
   // Anthropic
+  "claude-fable-5.2": 1000000,
+  "claude-fable-5.1": 1000000,
+  "claude-fable-5": 1000000,
+  "claude-opus-5.5": 1000000,
+  "claude-opus-5": 1000000,
+  "claude-sonnet-5.5": 1000000,
+  "claude-sonnet-5": 1000000,
+  "claude-haiku-5.5": 1000000,
   "claude-opus-4.6": 1000000,
   "claude-opus-4.5": 200000,
   "claude-opus-4.1": 200000,
@@ -46,7 +56,14 @@ export const CONTEXT_LIMITS: Record<string, number> = {
   "claude-3-5-haiku": 200000,
   "claude-3-haiku": 200000,
   "claude-3-opus": 200000,
-  // OpenAI: reasoning/Codex windows are 400k; Chat variants remain 128k.
+  // OpenAI: https://developers.openai.com/api/docs/models/{model-id}
+  // GPT-6 entries checked 2026-11-26.
+  "gpt-6.2-astra": 1050000,
+  "gpt-6.2-sol": 1050000,
+  "gpt-6.1-sol": 1050000,
+  "gpt-6.1-terra": 1050000,
+  "gpt-6-astra": 1050000,
+  "gpt-6-luna": 1050000,
   "gpt-5.2-pro": 400000,
   "gpt-5.2-codex": 400000,
   "gpt-5.2-chat": 128000,
@@ -83,6 +100,11 @@ export const CONTEXT_LIMITS: Record<string, number> = {
   "o1-mini": 128000,
   o1: 200000,
   // Google publishes input/output caps separately; retain its advertised window.
+  "gemini-3.8-flash": 1048576,
+  "gemini-3.7-flash": 1048576,
+  "gemini-3.6-flash": 1048576,
+  "gemini-3.5-flash": 1048576,
+  "gemini-3.5-flash-lite": 1048576,
   "gemini-3.1-pro-preview": 1048576,
   "gemini-3-pro-preview": 1048576,
   "gemini-3-flash-preview": 1048576,
@@ -96,9 +118,30 @@ export const CONTEXT_LIMITS: Record<string, number> = {
   "gemini-1.5-flash-8b": 1048576,
   "gemini-1.5-flash": 1048576,
   // MiniMax: "fast" is retained as a compatibility alias for "highspeed".
+  "minimax-m3.1-flash": 1000000,
+  "minimax-m3": 1000000,
+  "minimax-m2.7-highspeed": 204800,
+  "minimax-m2.7": 204800,
   "minimax-m2.5-highspeed": 204800,
   "minimax-m2.5-fast": 204800,
   "minimax-m2.5": 204800,
+  // Z.AI: https://docs.z.ai/guides/llm/glm-5.3
+  "glm-5.3-flashx-legal": 1000000,
+  "glm-5.3-flashx": 1000000,
+  "glm-5.3-flash": 1000000,
+  "glm-5.3": 1000000,
+  "glm-5.2": 1000000,
+  // Alibaba context only; regional and input-length pricing varies.
+  "qwen3.5-flash": 1000000,
+  "qwen3.5-plus": 1000000,
+};
+
+// Codex/ChatGPT subscription windows differ from the OpenAI API maximum.
+// https://developers.openai.com/codex/models
+const CODEX_CONTEXT_LIMITS: Record<string, number> = {
+  "gpt-6.2-astra": 1000000,
+  "gpt-6.2-sol": 1000000,
+  "gpt-6.1-sol": 500000,
 };
 
 /** Resolve an exact model, a provider-prefixed ID, or a recognized snapshot alias. */
@@ -136,15 +179,22 @@ function findModelKey(model: string, keys: string[]): string | null {
 
 /**
  * Resolve the provider-advertised total context window in tokens.
- * Unknown models return a heuristic 128k fallback, not a verified model limit.
+ * Unknown models return a heuristic 256k fallback, not a verified model limit.
  * Provider prefixes, dotted/hyphenated IDs, and date snapshots are supported.
+ * Pass "chatgpt" for Codex subscription windows; omitted providers use API windows.
  */
-export function getContextLimit(model: string): number {
+export function getContextLimit(model: string, provider?: string): number {
+  if (provider === "chatgpt") {
+    const codexKey = findModelKey(model, Object.keys(CODEX_CONTEXT_LIMITS));
+    if (codexKey !== null) {
+      return CODEX_CONTEXT_LIMITS[codexKey];
+    }
+  }
   const key = findModelKey(model, Object.keys(CONTEXT_LIMITS));
   if (key !== null) {
     return CONTEXT_LIMITS[key];
   }
-  return 128000;
+  return 256000;
 }
 
 // ----------------------------------------------------------------------------
@@ -159,6 +209,15 @@ export function getContextLimit(model: string): number {
  */
 export const MODEL_PRICING: Record<string, [number, number]> = {
   // Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
+  "claude-fable-5.2": [8, 40],
+  "claude-fable-5.1": [10, 50],
+  "claude-fable-5": [10, 50],
+  "claude-opus-5.5": [4, 20],
+  "claude-opus-5": [5, 25],
+  "claude-sonnet-5.5": [2, 10],
+  "claude-sonnet-5": [2, 10],
+  // Haiku 5.5 rates apply up to 100k input tokens.
+  "claude-haiku-5.5": [0.1, 0.5],
   "claude-opus-4.6": [5, 25],
   "claude-opus-4.5": [5, 25],
   "claude-opus-4.1": [15, 75],
@@ -174,6 +233,12 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   "claude-3-haiku": [0.25, 1.25],
   "claude-3-opus": [15, 75],
   // OpenAI: https://developers.openai.com/api/docs/models/{model-id}
+  "gpt-6.2-astra": [8, 40],
+  "gpt-6.2-sol": [2, 10],
+  "gpt-6.1-sol": [2, 10],
+  "gpt-6.1-terra": [1, 5],
+  "gpt-6-astra": [10, 50],
+  "gpt-6-luna": [0.1, 0.5],
   "gpt-5.2-pro": [21, 168],
   "gpt-5.2-codex": [1.75, 14],
   "gpt-5.2-chat": [1.75, 14],
@@ -210,6 +275,11 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   "o1-mini": [1.1, 4.4],
   o1: [15, 60],
   // Google: standard text rates for the shorter-prompt tier, without cache storage.
+  "gemini-3.8-flash": [0.75, 3.75],
+  "gemini-3.7-flash": [0.75, 3.75],
+  "gemini-3.6-flash": [0.75, 3.75],
+  "gemini-3.5-flash": [1.5, 9],
+  "gemini-3.5-flash-lite": [0.3, 2.5],
   "gemini-3.1-pro-preview": [2, 12],
   "gemini-3-pro-preview": [2, 12],
   "gemini-3-flash-preview": [0.5, 3],
@@ -222,25 +292,64 @@ export const MODEL_PRICING: Record<string, [number, number]> = {
   "gemini-1.5-pro": [1.25, 5],
   "gemini-1.5-flash": [0.075, 0.3],
   // MiniMax: https://platform.minimax.io/docs/pricing/overview
+  // M3 intentionally has context only because of input-length/service tiers.
+  "minimax-m3.1-flash": [0.15, 0.6],
+  "minimax-m2.7-highspeed": [0.6, 2.4],
+  "minimax-m2.7": [0.3, 1.2],
   "minimax-m2.5-highspeed": [0.6, 2.4],
   "minimax-m2.5-fast": [0.6, 2.4],
   "minimax-m2.5": [0.3, 1.2],
+  // Z.AI standard USD rates, not Zhipu's regional or reseller prices.
+  "glm-5.3-flashx-legal": [0.37, 1.25],
+  "glm-5.3-flashx": [0.37, 1.25],
+  "glm-5.3-flash": [0.15, 0.5],
+  "glm-5.3": [1.4, 4.4],
+  "glm-5.2": [1.4, 4.4],
 };
 
 /**
- * Cache pricing multipliers by provider prefix.
+ * Cache pricing multipliers by model or provider prefix.
  *
  * Each entry maps a model key prefix to `[readMultiplier, writeMultiplier]`
  * relative to the base input price.
- * - Anthropic: reads at 10% of base input, writes at 125% (1.25x)
- * - Gemini: cached content at 25% of base input, no write billing
+ * - Legacy Anthropic: reads at 10% of base input, writes at 125% (1.25x)
+ * - Legacy Gemini approximation: cached content at 25% of input, no write billing
  */
 const CACHE_PRICING: Record<string, [number, number]> = {
+  "claude-fable-5.2": [0.025, 1.25],
+  "claude-fable-5.1": [0.025, 1.25],
+  "claude-opus-5.5": [0.05, 1.25],
+  "claude-sonnet-5.5": [0.05, 1.25],
+  "gpt-6.2-astra": [0.05, 1.25],
+  "gpt-6.2-sol": [0.05, 1.25],
+  "gpt-6.1-sol": [0.05, 1.25],
+  "gpt-6.1-terra": [0.05, 1.25],
+  "gpt-6-astra": [0.1, 1.25],
+  "gpt-6-luna": [0.1, 1.25],
+  "gemini-3.8-flash": [0.1, 0],
+  "gemini-3.7-flash": [0.1, 0],
+  "gemini-3.6-flash": [0.1, 0],
+  "gemini-3.5-flash": [0.1, 0],
+  "minimax-m3.1-flash": [0.1, 0],
   "claude-": [0.1, 1.25],
   "gemini-": [0.25, 0],
 };
 
 function getCacheMultipliers(modelKey: string): [number, number] {
+  if (modelKey.startsWith("minimax-m2.7")) {
+    const [inputPrice] = MODEL_PRICING[modelKey];
+    return [0.06 / inputPrice, 0.375 / inputPrice];
+  }
+  if (modelKey.startsWith("glm-5.")) {
+    const [inputPrice] = MODEL_PRICING[modelKey];
+    if (modelKey.startsWith("glm-5.3-flashx")) {
+      return [0.075 / inputPrice, 0];
+    }
+    if (modelKey === "glm-5.3-flash") {
+      return [0.03 / inputPrice, 0];
+    }
+    return [0.26 / inputPrice, 0];
+  }
   if (modelKey.startsWith("minimax-m2.5")) {
     // Both variants use the same absolute cache rates (USD/MTok).
     // https://platform.minimax.io/docs/pricing/overview
@@ -258,8 +367,9 @@ function getCacheMultipliers(modelKey: string): [number, number] {
 /**
  * Estimate cost in USD for a request/response token pair using `MODEL_PRICING`.
  *
- * Cache estimates cover Anthropic's five-minute writes, a legacy Gemini
- * approximation, and documented MiniMax M2.5 rates. Other cache rates are omitted.
+ * Cache estimates use model-specific rates where available, with legacy
+ * Anthropic and Gemini fallbacks. GPT-6.2 and Terra writes use 30-minute retention.
+ * Long-context and service-tier premiums are excluded; other cache rates are omitted.
  *
  * @param model - Exact model identifier, provider-prefixed ID, or recognized snapshot.
  * @param inputTokens - Input/prompt tokens (non-cached).
@@ -291,7 +401,7 @@ export function estimateCost(
 }
 
 /**
- * Get list of known model names.
+ * Get model names with flat pricing estimates; context-only entries are excluded.
  *
  * @returns Sorted array of model identifiers.
  */

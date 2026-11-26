@@ -1,0 +1,44 @@
+{
+  "source": {
+    "url": "https://models.dev/api.json",
+    "retrieved": "2026-11-26",
+    "sha256": "0a93fa52761a70bc4f96eaea50586c3e1abe477ec41cc9c99a0b639b8afad4ef",
+    "crossCheck": "https://github.com/BerriAI/litellm/blob/b0912adb76f37c46d5bf9d04bf1c5c0db2d19479/model_prices_and_context_window.json"
+  },
+  "providers": {
+    "anthropic": {
+      "claude-fable-5-2": [1000000, 8, 40, 0.2, 10],
+      "claude-fable-5-1": [1000000, 10, 50, 0.25, 12.5],
+      "claude-fable-5": [1000000, 10, 50, 1, 12.5],
+      "claude-opus-5-5": [1000000, 4, 20, 0.2, 5],
+      "claude-opus-5": [1000000, 5, 25, 0.5, 6.25],
+      "claude-sonnet-5-5": [1000000, 2, 10, 0.1, 2.5],
+      "claude-sonnet-5": [1000000, 2, 10, 0.2, 2.5],
+      "claude-haiku-5-5": [1000000, 0.1, 0.5, 0.01, 0.125]
+    },
+    "zai": {
+      "glm-5.3-flashx-legal": [1000000, 0.37, 1.25, 0.075, 0],
+      "glm-5.3-flashx": [1000000, 0.37, 1.25, 0.075, 0],
+      "glm-5.3-flash": [1000000, 0.15, 0.5, 0.03, 0],
+      "glm-5.3": [1000000, 1.4, 4.4, 0.26, 0],
+      "glm-5.2": [1000000, 1.4, 4.4, 0.26, 0]
+    },
+    "minimax": {
+      "MiniMax-M2.7": [204800, 0.3, 1.2, 0.06, 0.375],
+      "MiniMax-M2.7-highspeed": [204800, 0.6, 2.4, 0.06, 0.375],
+      "MiniMax-M3.1-Flash": [1000000, 0.15, 0.6, 0.015, null]
+    },
+    "google": {
+      "gemini-3.8-flash": [1048576, 0.75, 3.75, 0.075, null],
+      "gemini-3.7-flash": [1048576, 0.75, 3.75, 0.075, null],
+      "gemini-3.6-flash": [1048576, 0.75, 3.75, 0.075, null],
+      "gemini-3.5-flash": [1048576, 1.5, 9, 0.15, null],
+      "gemini-3.5-flash-lite": [1048576, 0.3, 2.5, 0.03, null]
+    }
+  },
+  "contextOnly": {
+    "minimax/MiniMax-M3": 1000000,
+    "alibaba/qwen3.5-flash": 1000000,
+    "alibaba/qwen3.5-plus": 1000000
+  }
+}

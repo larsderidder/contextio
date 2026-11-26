@@ -47,13 +47,14 @@ import { estimateCost, getContextLimit, MODEL_PRICING } from '@contextio/core';
 
 const cost = estimateCost('claude-sonnet-4-20250514', 1000, 500);
 const limit = getContextLimit('gpt-4o');
+const codexLimit = getContextLimit('gpt-6.1-sol', 'chatgpt');
 ```
 
-`getContextLimit()` returns the provider-advertised total context window, not the maximum input or output budget. It is not a request-fit validator. Unknown models return a heuristic fallback. Model IDs accept provider prefixes and date snapshots; an unknown model variant does not inherit a base model's pricing.
+`getContextLimit(model, provider?)` returns the provider-advertised context window, not the maximum input or output budget. Pass `'chatgpt'` for Codex subscription windows; omitted providers use API windows. It is not a request-fit validator. Unknown models return a heuristic 256k fallback. Model IDs accept provider prefixes and date snapshots; an unknown model variant does not inherit a base model's pricing.
 
 `estimateCost()` uses standard direct-provider text rates. It does not account for batch discounts, long-context price tiers, regional or service-tier premiums, tool fees, or cache storage. Provider documentation is authoritative; source links live beside the tables in [`src/models.ts`](src/models.ts). Historical values remain available for retired models.
 
-Cache estimates currently cover Anthropic's five-minute writes, a legacy Gemini approximation, and MiniMax M2.5 rates. Other cache rates are omitted; these costs are estimates, not invoice calculations.
+Cache estimates use model-specific rates where available, with legacy Anthropic and Gemini fallbacks. GPT-6.2 and Terra writes use 30-minute retention. Other cache rates are omitted; these costs are estimates, not invoice calculations.
 
 ### Token estimation
 
